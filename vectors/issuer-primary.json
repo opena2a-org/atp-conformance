@@ -1,0 +1,14 @@
+{
+  "$comment": "Primary trusted issuer keypair for the ATX conformance suite. Seed and public key are RFC 8032 §7.1 Test 1, a published test vector. This is a TEST-ONLY keypair. The seed is publicly known; never use it in production.",
+  "role": "issuer-primary",
+  "algorithm": "Ed25519",
+  "provenance": {
+    "source": "RFC 8032 §7.1 Test 1",
+    "ref": "https://datatracker.ietf.org/doc/html/rfc8032#section-7.1",
+    "purpose": "deterministic, reproducible reference vector"
+  },
+  "seedHex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+  "publicKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+  "issuerDid": "did:opena2a:authority:opena2a.org",
+  "keyId": "did:opena2a:authority:opena2a.org#key-1"
+}
