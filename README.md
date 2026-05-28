@@ -11,7 +11,7 @@ report PASS or FAIL per vector. Fixture bytes are pinned in
 [`MANIFEST.sha256`](./MANIFEST.sha256).
 
 This suite mirrors the pattern set by
-[`atx-conformance`](https://github.com/opena2a-org/atx-conformance) (which
+[`atx-conformance`](https://github.com/opena2a-standards/atx-conformance) (which
 covers the ATX credential schema) and by
 [`a2a-idf-conformance/fixtures/composition/aim-did-rfc9421/`](https://github.com/opena2a-org/a2a-idf-conformance/tree/main/fixtures/composition/aim-did-rfc9421)
 (APS interop conformance for A2A-IDF wire signatures). It closes criterion (c)
@@ -132,7 +132,7 @@ verification end to end, run the Go verifier.
 The `issuer-primary` Ed25519 keypair in
 [`vectors/issuer-primary.json`](./vectors/issuer-primary.json) is the SAME
 bytes as the `issuer-primary` vector in
-[`atx-conformance/vectors/issuer-primary.json`](https://github.com/opena2a-org/atx-conformance/blob/main/vectors/issuer-primary.json):
+[`atx-conformance/vectors/issuer-primary.json`](https://github.com/opena2a-standards/atx-conformance/blob/main/vectors/issuer-primary.json):
 RFC 8032 §7.1 Test 1 seed, `did:opena2a:authority:opena2a.org` issuer DID.
 The ML-DSA-65 seed in [`vectors/mldsa65-seed.json`](./vectors/mldsa65-seed.json)
 is also the same 32-byte seed as atx-conformance's. This is deliberate: a
