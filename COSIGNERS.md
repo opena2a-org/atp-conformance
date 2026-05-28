@@ -16,7 +16,7 @@ A2A coordination map's criterion (c) on
 
 ```bash
 # Clone and verify
-git clone https://github.com/opena2a-org/atp-conformance
+git clone https://github.com/opena2a-standards/atp-conformance
 cd atp-conformance
 
 # Run both verifiers and record exit summaries
