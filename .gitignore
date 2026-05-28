@@ -6,6 +6,9 @@
 *.dylib
 *.test
 *.out
+verifiers/go/verify
+verifiers/go/go
+scripts/generate-fixtures/generate-fixtures
 
 # Python
 __pycache__/
@@ -20,3 +23,14 @@ venv/
 .idea/
 .vscode/
 *.swp
+
+# Secrets — never commit
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secrets.json
+credentials.json
