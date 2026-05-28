@@ -247,8 +247,8 @@ breaking change for downstream verifiers.
 
 | Implementation | Verifier | Status |
 |---|---|---|
-| `opena2a-org/atp-conformance/verifiers/go` (this repo) | Go, full Ed25519 plus ML-DSA-65 | 4 / 4 PASS |
-| `opena2a-org/atp-conformance/verifiers/python` (this repo) | Python, Ed25519, ML-DSA-65 out of scope | 4 / 4 PASS |
+| `opena2a-standards/atp-conformance/verifiers/go` (this repo) | Go, full Ed25519 plus ML-DSA-65 | 4 / 4 PASS |
+| `opena2a-standards/atp-conformance/verifiers/python` (this repo) | Python, Ed25519, ML-DSA-65 out of scope | 4 / 4 PASS |
 
 Independent second-party implementations and cosigners are tracked in
 [`COSIGNERS.md`](./COSIGNERS.md) and on the sibling issue
