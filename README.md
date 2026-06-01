@@ -140,6 +140,20 @@ peer cosigner who has already audited the atx-conformance vectors can rely
 on the same audit for this suite. Both vector files are TEST-ONLY; the
 seeds are publicly known and MUST NOT be used in production.
 
+### DID method
+
+The `did:opena2a:<type>:<id>` identifiers in this suite (issuer and agent
+DIDs) are governed by the `did:opena2a` DID method specification at
+[`opena2a-standards/did-method-opena2a`](https://github.com/opena2a-standards/did-method-opena2a)
+(Apache-2.0), filed for registration with the W3C DID Extensions registry
+on [`w3c/did-extensions#717`](https://github.com/w3c/did-extensions/pull/717).
+The method is registry-mediated rather than fully decentralized; trust in
+a resolved DID is trust in the OpenA2A Registry that issued it. This
+property is acknowledged in the method spec and does not affect the
+fixture-level verifier behavior in this repository, which configures
+trusted authorities directly from each fixture rather than resolving them
+over the network.
+
 ## Fixtures
 
 All fixtures use:
@@ -237,6 +251,7 @@ breaking change for downstream verifiers.
 | Component | Version | Source |
 |---|---|---|
 | ATP spec | v1.0.0-rc1 | [`opena2a-org/agent-trust-protocol/ATP-SPEC.md`](https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md) |
+| `did:opena2a` method | v0.1 (W3C registration filed, PR `w3c/did-extensions#717`) | [`opena2a-standards/did-method-opena2a`](https://github.com/opena2a-standards/did-method-opena2a/blob/main/did-method-opena2a.md) |
 | Ed25519 test vector source | RFC 8032 §7.1 Test 1 | [datatracker.ietf.org/doc/html/rfc8032](https://datatracker.ietf.org/doc/html/rfc8032) |
 | ML-DSA-65 | FIPS 204 final | [csrc.nist.gov/pubs/fips/204/final](https://csrc.nist.gov/pubs/fips/204/final) |
 | CIRCL (ML-DSA-65 implementation) | v1.6.2 | [github.com/cloudflare/circl](https://github.com/cloudflare/circl) |
