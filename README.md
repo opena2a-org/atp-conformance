@@ -35,9 +35,18 @@ What this suite verifies:
 | ATP §4.3 Ed25519 signing (baseline) | both trust-proof fixtures |
 | ATP §4.3 hybrid Ed25519 + ML-DSA-65 signing (FIPS 204) | `fixtures/trust-proof-hybrid.json` (Go verifier validates both algorithms; Python validates Ed25519 only) |
 | ATP §4.4 verification steps 1-5 (expiry, issuer, key, signature, semantic) | both trust-proof fixtures, all verifiers |
+| ATP §4.4 step 1 must-reject: expired proof (valid signature, past expiresAt) | `fixtures/trust-proof-expired.json` |
+| ATP §4.4 step 2 must-reject: untrusted issuer (valid signature, issuer not in trusted set) | `fixtures/trust-proof-untrusted-issuer.json` |
+| ATP §4.4 step 4 must-reject: tampered Ed25519 signature (first byte XOR 0xFF) | `fixtures/trust-proof-tampered-signature.json` |
 | ATP §5.6 Signed Tree Head | `fixtures/transparency-log-sth.json` |
 
-What this suite does NOT verify in v0.1 (deferred to v0.2+):
+Each negative fixture is valid in every respect except the one defect it
+pins, so a verifier that skips that verification step (and only that step)
+wrongly ACCEPTs it. Expected outcomes pin the reject category
+(`EXPIRED`, `UNTRUSTED_ISSUER`, `SIGNATURE_INVALID`), so rejecting for the
+wrong reason also fails.
+
+What this suite does NOT verify in v0.2 (deferred to v0.3+):
 
 - Transparency log inclusion proofs (ATP §5.4). Byte-stability requires a
   pinned tree-state fixture, which is bigger than the marginal coverage.
@@ -48,9 +57,26 @@ What this suite does NOT verify in v0.1 (deferred to v0.2+):
 - Federation cosignature (ATP §6, Level 3). Production has no second
   authority to source a real cosigned proof from. Will be added once a real
   federation peer exists.
-- Negative fixtures (expired, untrusted-issuer, tampered-signature). The
-  verifier code paths exist; ACCEPT-only fixtures ship first to anchor the
-  positive baseline. Negatives are a routine v0.2 addition.
+
+The full requirement-to-fixture mapping is machine-readable in
+[`conformance.json`](./conformance.json), regenerated from the fixtures by
+[`scripts/conformance_profile.py`](./scripts/conformance_profile.py) and
+CI-checked against drift.
+
+## Continuous verification
+
+[`.github/workflows/conformance.yml`](./.github/workflows/conformance.yml)
+enforces every claim in this README on each push and pull request:
+
+1. Both reference verifiers run against `fixtures/` and must report
+   `7 pass, 0 fail`.
+2. The fixture generator re-runs and the committed fixture bytes plus
+   `MANIFEST.sha256` must reproduce exactly (byte-pin).
+3. The cross-implementation parity gate
+   ([`scripts/parity/parity.py`](./scripts/parity/parity.py)) asserts the Go
+   and Python verifiers agree per fixture on gate status, verdict, and
+   reject category, and publishes `parity-report.json` as a CI artifact.
+4. `conformance.json` must match the fixture set.
 
 ## Relationship to the existing ATP bash conformance scripts
 
@@ -207,10 +233,17 @@ For full hybrid verification end to end, use the Go verifier.
 
 ### Expected output
 
-Both verifiers report `summary: 4 pass, 0 fail (4 fixtures)` against the
-shipped fixture set. Any divergence on bytes (the fixture file was modified)
-or on verifier semantics (the verifier has drifted from the spec) shows up
-as one or more FAIL lines.
+Both verifiers report `summary: 7 pass, 0 fail (7 fixtures)` against the
+shipped fixture set (4 ACCEPT, 3 REJECT). Any divergence on bytes (the
+fixture file was modified) or on verifier semantics (the verifier has
+drifted from the spec) shows up as one or more FAIL lines.
+
+To additionally assert the two verifiers agree with each other per fixture
+(gate status, verdict, reject category):
+
+```bash
+python3 scripts/parity/parity.py
+```
 
 ## Reproducing the fixtures
 
@@ -276,7 +309,7 @@ Second-party cosigners sign [`MANIFEST.sha256`](./MANIFEST.sha256) using
 add an entry to [`COSIGNERS.md`](./COSIGNERS.md) recording:
 
 - The commit SHA at which they verified
-- The verifier exit summary they observed (e.g., `go=4 pass, 0 fail; python=4 pass, 0 fail`)
+- The verifier exit summary they observed (e.g., `go=7 pass, 0 fail; python=7 pass, 0 fail`)
 - Their identity / organization
 - The Sigstore signature artifact path
 

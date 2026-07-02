@@ -1,0 +1,77 @@
+name: Conformance
+
+# Every README PASS claim in this repository is enforced here:
+# both reference verifiers run against the byte-pinned fixture set,
+# the fixture generator must reproduce the committed bytes exactly,
+# the cross-implementation parity gate must report agreement, and the
+# machine-readable conformance profile must match the fixtures.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    name: verifiers + parity + byte-pin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: |
+            verifiers/go/go.sum
+            scripts/generate-fixtures/go.sum
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python verifier dependency
+        run: python3 -m pip install "cryptography>=42.0.0"
+
+      - name: Go verifier over fixtures
+        working-directory: verifiers/go
+        run: go run . ../../fixtures
+
+      - name: Python verifier over fixtures
+        working-directory: verifiers/python
+        run: python3 verify.py ../../fixtures
+
+      - name: Fixture byte-pin (generator determinism)
+        working-directory: scripts/generate-fixtures
+        run: |
+          go run .
+          cd ../..
+          git diff --exit-code -- fixtures MANIFEST.sha256
+
+      - name: MANIFEST.sha256 integrity
+        run: |
+          rc=0
+          while read -r sha file; do
+            [ -z "$sha" ] && continue
+            got=$(sha256sum "$file" | awk '{print $1}')
+            if [ "$got" != "$sha" ]; then
+              echo "MANIFEST mismatch: $file"; rc=1
+            fi
+          done < MANIFEST.sha256
+          exit $rc
+
+      - name: Cross-implementation parity gate
+        run: python3 scripts/parity/parity.py --json parity-report.json
+
+      - name: Conformance profile is current
+        run: python3 scripts/conformance_profile.py --check
+
+      - name: Upload parity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-report
+          path: parity-report.json
+          if-no-files-found: ignore

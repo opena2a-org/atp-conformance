@@ -1,0 +1,218 @@
+{
+  "$schema": "https://specs.opena2a.org/schemas/conformance-profile-v1.json",
+  "suite": "atp-conformance",
+  "spec": {
+    "id": "ATP",
+    "name": "Agent Trust Protocol",
+    "version": "1.0.0-rc1",
+    "ref": "https://github.com/opena2a-standards/agent-trust-protocol/blob/main/ATP-SPEC.md"
+  },
+  "fixtureManifest": "MANIFEST.sha256",
+  "verifiers": [
+    {
+      "language": "go",
+      "path": "verifiers/go",
+      "coverage": "full: Ed25519 and ML-DSA-65 (FIPS 204) hybrid signatures"
+    },
+    {
+      "language": "python",
+      "path": "verifiers/python",
+      "coverage": "Ed25519; ML-DSA-65 signatures recorded as present, verification delegated to the Go verifier"
+    }
+  ],
+  "notCovered": [
+    {
+      "specSection": "§5.4 Transparency log inclusion proofs",
+      "reason": "byte-stability requires a pinned tree-state fixture; deferred"
+    },
+    {
+      "specSection": "§5.5 Consistency proofs",
+      "reason": "same pinned-tree-state requirement; deferred"
+    },
+    {
+      "specSection": "§8.1 Revocation CRL entries",
+      "reason": "revocation events live on the transparency log; CRL fixtures redundant once revocation events are byte-stable"
+    },
+    {
+      "specSection": "§6 Federation cosignature (Level 3)",
+      "reason": "no second production authority exists to source a real cosigned proof from"
+    }
+  ],
+  "requirements": [
+    {
+      "fixture": "fixtures/discovery-valid.json",
+      "name": "atp-v1/discovery-valid",
+      "fixtureType": "discovery",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§7.1 Well-Known Endpoint"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "ACCEPT",
+      "description": "A well-formed ATP discovery response from /.well-known/atp per ATP §7.1. All required fields present, conformanceLevel within range, publicKeys structurally valid. Verifier MUST ACCEPT."
+    },
+    {
+      "fixture": "fixtures/transparency-log-sth.json",
+      "name": "atp-v1/transparency-log-sth",
+      "fixtureType": "sth",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§5.6 Signed Tree Head, RFC 6962 §3.5"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "ACCEPT",
+      "description": "A Signed Tree Head per ATP §5.6: treeSize, timestamp, rootHash (\"SHA256:\" + 64 hex chars), Ed25519 signature over the raw 32-byte decoded rootHash. Compatible with RFC 6962 §3.5 Certificate Transparency monitor expectations. Verifier MUST ACCEPT."
+    },
+    {
+      "fixture": "fixtures/trust-proof-baseline.json",
+      "name": "atp-v1/trust-proof-baseline",
+      "fixtureType": "trustProof",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§4.2 Trust Proof Format, §4.3 Signing"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "ACCEPT",
+      "description": "A trust proof issued by a single trusted authority with one Ed25519 signature over the canonical pipe-delimited 7-field payload per ATP §4.2 + §4.3. This is the MUST-implement baseline for any ATP-conformant verifier. Verifier MUST ACCEPT."
+    },
+    {
+      "fixture": "fixtures/trust-proof-expired.json",
+      "name": "atp-v1/trust-proof-expired",
+      "fixtureType": "trustProof",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§4.4 Verification (step 1: expiry)"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "REJECT[EXPIRED]",
+      "description": "A trust proof whose expiresAt (2025-01-01) is before the fixture's pinned verifier clock (2026-05-24). The Ed25519 signature IS valid over the canonical payload; expiry is the sole defect. Verifier MUST REJECT with category EXPIRED per ATP §4.4 step 1."
+    },
+    {
+      "fixture": "fixtures/trust-proof-hybrid.json",
+      "name": "atp-v1/trust-proof-hybrid",
+      "fixtureType": "trustProof",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§4.3 Signing (hybrid mode), FIPS 204 ML-DSA-65"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "ACCEPT",
+      "description": "A trust proof carrying BOTH an Ed25519 signature AND an ML-DSA-65 signature (FIPS 204) over the same canonical payload per ATP §4.3 hybrid signing path. Production reference at api.oa2a.org emits hybrid proofs today; this fixture pins that wire format. A spec-conformant Go verifier MUST verify BOTH signatures. The Python reference verifier records ML-DSA-65 as present-but-out-of-scope. Verifier MUST ACCEPT."
+    },
+    {
+      "fixture": "fixtures/trust-proof-tampered-signature.json",
+      "name": "atp-v1/trust-proof-tampered-signature",
+      "fixtureType": "trustProof",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§4.4 Verification (step 4: signature)"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "REJECT[SIGNATURE_INVALID]",
+      "description": "The baseline trust proof with the first byte of its Ed25519 signature deterministically corrupted (XOR 0xFF) after signing. Dates, issuer, and payload are all valid. Verifier MUST REJECT with category SIGNATURE_INVALID per ATP §4.4 step 4."
+    },
+    {
+      "fixture": "fixtures/trust-proof-untrusted-issuer.json",
+      "name": "atp-v1/trust-proof-untrusted-issuer",
+      "fixtureType": "trustProof",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§4.4 Verification (step 2: issuer trust)"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "REJECT[UNTRUSTED_ISSUER]",
+      "description": "A structurally valid, correctly signed, in-date trust proof whose issuerDid (did:opena2a:authority:opena2a.org) is NOT in the verifier's trustedIssuers list (which trusts only did:opena2a:authority:partner.example). Verifier MUST REJECT with category UNTRUSTED_ISSUER per ATP §4.4 step 2."
+    }
+  ]
+}
