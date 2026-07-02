@@ -198,6 +198,20 @@ func normalizeRFC3339(s string) string {
 // signing
 // ---------------------------------------------------------------------------
 
+// flipFirstSignatureByte deterministically corrupts a base64-encoded
+// signature by XORing its first raw byte with 0xFF. Used to generate the
+// tampered-signature negative fixture: the corruption is byte-stable, so the
+// fixture reproduces identically on every generator run.
+func flipFirstSignatureByte(b64 string) string {
+	raw, err := base64.StdEncoding.DecodeString(b64)
+	must(err)
+	if len(raw) == 0 {
+		panic("empty signature")
+	}
+	raw[0] ^= 0xFF
+	return base64.StdEncoding.EncodeToString(raw)
+}
+
 func signEd25519(seedHex string, payload []byte) ProofSignature {
 	seed, err := hex.DecodeString(seedHex)
 	must(err)
@@ -359,6 +373,78 @@ func main() {
 				VerifierState: defaultVerifierState,
 				Expected:      ExpectedOutcome{VerifyResult: "ACCEPT"},
 				SignedTreeHead: &sth,
+			}
+		}},
+		{"fixtures/trust-proof-expired.json", func() Fixture {
+			// Identical to the baseline proof except both timestamps are in the
+			// past relative to the fixed verifier clock. The Ed25519 signature is
+			// VALID over the canonical payload (signed after the dates are set),
+			// so expiry is the only reason to reject: a verifier that skips the
+			// ATP §4.4 step-1 expiry check and jumps straight to signature
+			// verification would wrongly ACCEPT this fixture.
+			tp := newBaselineTrustProof()
+			tp.IssuedAt = "2024-01-01T00:00:00Z"
+			tp.ExpiresAt = "2025-01-01T00:00:00Z" // fixed clock is 2026-05-24
+			sig := signEd25519(primary.SeedHex, canonicalProofPayload(&tp))
+			sig.KeyID = primary.KeyID
+			tp.Signatures = []ProofSignature{sig}
+			return Fixture{
+				Schema:        "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:          "atp-v1/trust-proof-expired",
+				Description:   "A trust proof whose expiresAt (2025-01-01) is before the fixture's pinned verifier clock (2026-05-24). The Ed25519 signature IS valid over the canonical payload; expiry is the sole defect. Verifier MUST REJECT with category EXPIRED per ATP §4.4 step 1.",
+				FixtureType:   "trustProof",
+				Spec:          specRefs("§4.4 Verification (step 1: expiry)"),
+				KeypairRefs:   []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState: defaultVerifierState,
+				Expected:      ExpectedOutcome{VerifyResult: "REJECT", RejectCategory: "EXPIRED", ReasonContains: "expired"},
+				TrustProof:    &tp,
+			}
+		}},
+		{"fixtures/trust-proof-untrusted-issuer.json", func() Fixture {
+			// Identical to the baseline proof — valid signature, in-date — but the
+			// verifier's trustedIssuers list names a DIFFERENT authority, so the
+			// proof's issuerDid is not trusted. Rejects at ATP §4.4 step 2 before
+			// any cryptography runs. A verifier that only checks the signature
+			// against configured public keys (and never the issuer allowlist)
+			// would wrongly ACCEPT this fixture.
+			tp := newBaselineTrustProof()
+			sig := signEd25519(primary.SeedHex, canonicalProofPayload(&tp))
+			sig.KeyID = primary.KeyID
+			tp.Signatures = []ProofSignature{sig}
+			untrustedState := defaultVerifierState
+			untrustedState.TrustedIssuers = []string{"did:opena2a:authority:partner.example"}
+			return Fixture{
+				Schema:        "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:          "atp-v1/trust-proof-untrusted-issuer",
+				Description:   "A structurally valid, correctly signed, in-date trust proof whose issuerDid (did:opena2a:authority:opena2a.org) is NOT in the verifier's trustedIssuers list (which trusts only did:opena2a:authority:partner.example). Verifier MUST REJECT with category UNTRUSTED_ISSUER per ATP §4.4 step 2.",
+				FixtureType:   "trustProof",
+				Spec:          specRefs("§4.4 Verification (step 2: issuer trust)"),
+				KeypairRefs:   []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState: untrustedState,
+				Expected:      ExpectedOutcome{VerifyResult: "REJECT", RejectCategory: "UNTRUSTED_ISSUER", ReasonContains: "issuer"},
+				TrustProof:    &tp,
+			}
+		}},
+		{"fixtures/trust-proof-tampered-signature.json", func() Fixture {
+			// The baseline proof with the first byte of the Ed25519 signature
+			// flipped after signing (deterministic XOR 0xFF). Everything else —
+			// dates, issuer, payload — is valid, so signature verification is the
+			// only step that can catch it.
+			tp := newBaselineTrustProof()
+			sig := signEd25519(primary.SeedHex, canonicalProofPayload(&tp))
+			sig.KeyID = primary.KeyID
+			sig.Value = flipFirstSignatureByte(sig.Value)
+			tp.Signatures = []ProofSignature{sig}
+			return Fixture{
+				Schema:        "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:          "atp-v1/trust-proof-tampered-signature",
+				Description:   "The baseline trust proof with the first byte of its Ed25519 signature deterministically corrupted (XOR 0xFF) after signing. Dates, issuer, and payload are all valid. Verifier MUST REJECT with category SIGNATURE_INVALID per ATP §4.4 step 4.",
+				FixtureType:   "trustProof",
+				Spec:          specRefs("§4.4 Verification (step 4: signature)"),
+				KeypairRefs:   []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState: defaultVerifierState,
+				Expected:      ExpectedOutcome{VerifyResult: "REJECT", RejectCategory: "SIGNATURE_INVALID", ReasonContains: "did not verify"},
+				TrustProof:    &tp,
 			}
 		}},
 	}

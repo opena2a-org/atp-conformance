@@ -37,7 +37,7 @@ cosign sign-blob MANIFEST.sha256 \
 
 | Cosigner | Commit SHA | Go verifier | Python verifier | Sigstore artifact | Date |
 |---|---|---|---|---|---|
-| opena2a-org (self-cosigned, v0.1.0 baseline) | _set on first release_ | `4 pass, 0 fail` | `4 pass, 0 fail` | _set on first release_ | _set on first release_ |
+| opena2a-org (self-cosigned, v0.2.0 baseline) | _set on first release_ | `7 pass, 0 fail` | `7 pass, 0 fail` | _set on first release_ | _set on first release_ |
 
 Self-cosignature exists to anchor the baseline; second-party signatures are
 what close criterion (c). Recruiting at least one second-party cosigner per
