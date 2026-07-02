@@ -493,7 +493,7 @@ type keyVector struct {
 }
 
 func mustLoadKeyVector(relPath string) keyVector {
-	b, err := os.ReadFile(filepath.Join(outDir, relPath))
+	b, err := os.ReadFile(filepath.Join(outDir, relPath)) //nolint:gosec // G304: build-time tool; outDir + constant relPath, no untrusted input
 	must(err)
 	var v keyVector
 	must(json.Unmarshal(b, &v))
@@ -528,7 +528,7 @@ func mustWriteJSONPretty(path string, v any) {
 }
 
 func sha256FileHex(path string) string {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) //nolint:gosec // G304: build-time tool hashing files it just wrote under outDir
 	must(err)
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
