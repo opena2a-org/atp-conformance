@@ -1,0 +1,23 @@
+# Security-focused linting for the Go verifier + fixture-generation tooling.
+#
+# gosec G204 (subprocess with variable / command injection) and G304/G703 (file
+# inclusion / path traversal via variable) are ENFORCED here. Those classes are
+# silently suppressed by golangci-lint's `common-false-positives` / `legacy`
+# exclusion presets, so we deliberately do NOT enable any exclusion preset.
+# Verified false positives are suppressed per-site with `//nolint:gosec` (see
+# verify.go / generate-fixtures/main.go) so a future request-derived read still trips.
+version: "2"
+run:
+  modules-download-mode: mod
+linters:
+  default: none
+  enable:
+    - gosec
+    - bodyclose
+  settings:
+    gosec:
+      excludes:
+        - G301 # dir perms: public conformance fixtures / build output are intentionally world-readable
+        - G306 # file perms: generated fixtures + MANIFEST.sha256 are public test vectors
+  exclusions:
+    generated: lax

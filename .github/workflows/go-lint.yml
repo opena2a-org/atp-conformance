@@ -1,0 +1,34 @@
+name: Go Security Lint
+
+# Enforces gosec G204 (command injection) and G304/G703 (path traversal / file
+# inclusion) on the Go verifier and fixture-generation tooling. See .golangci.yml.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gosec:
+    name: gosec (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - verifiers/go
+          - scripts/generate-fixtures
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+          working-directory: ${{ matrix.module }}
