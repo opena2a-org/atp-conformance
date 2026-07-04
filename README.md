@@ -77,6 +77,12 @@ enforces every claim in this README on each push and pull request:
    and Python verifiers agree per fixture on gate status, verdict, and
    reject category, and publishes `parity-report.json` as a CI artifact.
 4. `conformance.json` must match the fixture set.
+5. Schema validation
+   ([`scripts/schema_validation.py`](./scripts/schema_validation.py)): every
+   fixture payload (`trustProof`, `signedTreeHead`, `discoveryResponse`) must
+   validate against the ATP-SPEC machine-readable schemas, vendored under
+   `schemas/vendor/agent-trust-protocol/` and byte-drift-gated against a
+   pinned agent-trust-protocol ref.
 
 ## Relationship to the existing ATP bash conformance scripts
 
