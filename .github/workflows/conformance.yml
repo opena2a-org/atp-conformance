@@ -43,6 +43,26 @@ jobs:
         working-directory: verifiers/python
         run: python3 verify.py ../../fixtures
 
+      - name: Schema validation (fixtures vs vendored spec schemas)
+        run: |
+          python3 -m pip install "jsonschema>=4.21"
+          python3 scripts/schema_validation.py
+
+      - name: Vendored schema drift gate (pinned agent-trust-protocol ref)
+        uses: actions/checkout@v4
+        with:
+          repository: opena2a-standards/agent-trust-protocol
+          ref: 6e0260b113a84a63a795fae90eb2aaefbe37ae8f
+          path: .spec-src
+
+      - name: Vendored schema drift gate (compare)
+        run: |
+          for f in trust-proof-v1 signed-tree-head-v1 discovery-v1; do
+            diff ".spec-src/schemas/$f.schema.json" \
+                 "schemas/vendor/agent-trust-protocol/$f.schema.json"
+          done
+          rm -rf .spec-src
+
       - name: Fixture byte-pin (generator determinism)
         working-directory: scripts/generate-fixtures
         run: |
