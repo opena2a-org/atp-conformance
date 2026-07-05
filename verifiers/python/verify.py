@@ -31,6 +31,7 @@ Exit 0 iff every fixture's observed result matches expected.verifyResult.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import sys
 from dataclasses import dataclass
@@ -303,6 +304,219 @@ def verify_sth(fixture: dict[str, Any]) -> VerifyResult:
 
 
 # ---------------------------------------------------------------------------
+# RFC 6962 Merkle verification (ATP §5.4/§5.5)
+#
+# leaf = SHA-256(0x00 || entry), node = SHA-256(0x01 || left || right).
+# Verification follows RFC 9162 §2.1.3.2 (inclusion) and §2.1.4.2
+# (consistency). VERBATIM mirror of the Go verifier.
+# ---------------------------------------------------------------------------
+
+def _merkle_node_hash(left: bytes, right: bytes) -> bytes:
+    return hashlib.sha256(b"\x01" + left + right).digest()
+
+
+def _wire_hash_bytes(wire: str) -> bytes:
+    """Decodes a "SHA256:<64 lowercase hex>" wire hash."""
+    if not wire.startswith("SHA256:"):
+        raise ValueError(f"hash {wire!r} missing SHA256: prefix")
+    raw = bytes.fromhex(wire[len("SHA256:"):])
+    if len(raw) != 32:
+        raise ValueError(f"hash {wire!r} must decode to 32 bytes, got {len(raw)}")
+    return raw
+
+
+def _verify_merkle_inclusion(leaf_index: int, tree_size: int, leaf_hash: bytes, path: list[bytes], root: bytes) -> bool:
+    if leaf_index < 0 or tree_size < 1 or leaf_index >= tree_size:
+        return False
+    fn, sn = leaf_index, tree_size - 1
+    r = leaf_hash
+    for p in path:
+        if sn == 0:
+            return False
+        if fn % 2 == 1 or fn == sn:
+            r = _merkle_node_hash(p, r)
+            if fn % 2 == 0:
+                while fn % 2 == 0 and fn != 0:
+                    fn >>= 1
+                    sn >>= 1
+        else:
+            r = _merkle_node_hash(r, p)
+        fn >>= 1
+        sn >>= 1
+    return sn == 0 and r == root
+
+
+def _verify_merkle_consistency(from_size: int, to_size: int, path: list[bytes], from_root: bytes, to_root: bytes) -> bool:
+    if from_size < 1 or from_size > to_size:
+        return False
+    if from_size == to_size:
+        return len(path) == 0 and from_root == to_root
+    full = list(path)
+    if from_size & (from_size - 1) == 0:
+        full = [from_root] + full
+    if not full:
+        return False
+    fn, sn = from_size - 1, to_size - 1
+    while fn % 2 == 1:
+        fn >>= 1
+        sn >>= 1
+    fr = sr = full[0]
+    for c in full[1:]:
+        if sn == 0:
+            return False
+        if fn % 2 == 1 or fn == sn:
+            fr = _merkle_node_hash(c, fr)
+            sr = _merkle_node_hash(c, sr)
+            if fn % 2 == 0:
+                while fn % 2 == 0 and fn != 0:
+                    fn >>= 1
+                    sn >>= 1
+        else:
+            sr = _merkle_node_hash(sr, c)
+        fn >>= 1
+        sn >>= 1
+    return sn == 0 and fr == from_root and sr == to_root
+
+
+def _check_embedded_sth(label: str, sth: dict[str, Any] | None, keys: list[dict[str, Any]]) -> tuple[str, str]:
+    """Validates a tree head embedded in a §5.4/§5.5 payload — same rules as
+    verify_sth, factored so the proof verifiers stay behaviorally identical.
+    Returns (category, reason); empty category means the head verifies."""
+    if not sth:
+        return ("PARSE_ERROR", f"{label} missing")
+    if int(sth.get("treeSize", 0)) <= 0:
+        return ("STH_INVALID", f"{label}.treeSize {sth.get('treeSize')} must be > 0")
+    try:
+        datetime.fromisoformat(sth["timestamp"].replace("Z", "+00:00"))
+    except (KeyError, ValueError) as exc:
+        return ("STH_INVALID", f"{label} bad timestamp: {exc}")
+    try:
+        root_bytes = sth_signed_bytes(sth["rootHash"])
+    except (KeyError, ValueError) as exc:
+        return ("STH_INVALID", f"{label}: {exc}")
+    try:
+        sig_bytes = base64.b64decode(sth["signature"])
+    except Exception as exc:  # noqa: BLE001 - any decode failure is the same verdict
+        return ("SIGNATURE_INVALID", f"{label} signature has invalid base64: {exc}")
+    eds, _ = index_public_keys(keys)
+    for pk in eds:
+        try:
+            pk.verify(sig_bytes, root_bytes)
+            return ("", "")
+        except InvalidSignature:
+            continue
+    return ("SIGNATURE_INVALID", f"{label} Ed25519 signature did not verify against any configured public key")
+
+
+def verify_inclusion_proof(fixture: dict[str, Any]) -> VerifyResult:
+    """ATP §5.4: embedded tree head per §5.6, then RFC 9162 §2.1.3.2
+    recomputation from leafHash along auditPath must reproduce sth.rootHash."""
+    ip = fixture.get("inclusionProof")
+    if not ip:
+        return VerifyResult(reject_category="PARSE_ERROR", reason="inclusionProof missing")
+    vs = fixture["verifierState"]
+
+    try:
+        leaf = _wire_hash_bytes(ip["leafHash"])
+        path = [_wire_hash_bytes(p) for p in ip.get("auditPath", [])]
+    except (KeyError, ValueError) as exc:
+        return VerifyResult(reject_category="PARSE_ERROR", reason=str(exc))
+    sth = ip.get("signedTreeHead")
+    cat, reason = _check_embedded_sth("signedTreeHead", sth, vs["publicKeys"])
+    if cat:
+        return VerifyResult(reject_category=cat, reason=reason)
+    try:
+        root = _wire_hash_bytes(sth["rootHash"])
+    except ValueError as exc:
+        return VerifyResult(reject_category="PARSE_ERROR", reason=str(exc))
+    log_index = int(ip.get("logIndex", -1))
+    tree_size = int(sth["treeSize"])
+    if log_index < 0 or log_index >= tree_size:
+        return VerifyResult(reject_category="PARSE_ERROR", reason=f"logIndex {log_index} out of range for treeSize {tree_size}")
+    if not _verify_merkle_inclusion(log_index, tree_size, leaf, path, root):
+        return VerifyResult(reject_category="PROOF_INVALID", reason="recomputed root from leafHash along auditPath does not equal signedTreeHead.rootHash")
+    return VerifyResult(accepted=True, ed25519_valid=True, sigs_expected=1, sigs_valid=1)
+
+
+def verify_consistency_proof(fixture: dict[str, Any]) -> VerifyResult:
+    """ATP §5.5: both embedded tree heads per §5.6, then RFC 9162 §2.1.4.2
+    must reproduce both roots."""
+    cp = fixture.get("consistencyProof")
+    if not cp:
+        return VerifyResult(reject_category="PARSE_ERROR", reason="consistencyProof missing")
+    vs = fixture["verifierState"]
+
+    from_sth = cp.get("fromSignedTreeHead")
+    to_sth = cp.get("toSignedTreeHead")
+    if not from_sth or not to_sth:
+        return VerifyResult(reject_category="PARSE_ERROR", reason="fromSignedTreeHead/toSignedTreeHead missing")
+    from_size = int(cp.get("fromSize", -1))
+    to_size = int(cp.get("toSize", -1))
+    if from_size != int(from_sth.get("treeSize", -2)) or to_size != int(to_sth.get("treeSize", -2)):
+        return VerifyResult(reject_category="PARSE_ERROR", reason="fromSize/toSize must equal the embedded tree heads' treeSize values")
+    if from_size >= to_size:
+        return VerifyResult(reject_category="PARSE_ERROR", reason=f"fromSize {from_size} must be < toSize {to_size}")
+    try:
+        path = [_wire_hash_bytes(p) for p in cp.get("consistencyPath", [])]
+    except ValueError as exc:
+        return VerifyResult(reject_category="PARSE_ERROR", reason=str(exc))
+    for label, sth in (("fromSignedTreeHead", from_sth), ("toSignedTreeHead", to_sth)):
+        cat, reason = _check_embedded_sth(label, sth, vs["publicKeys"])
+        if cat:
+            return VerifyResult(reject_category=cat, reason=reason)
+    try:
+        from_root = _wire_hash_bytes(from_sth["rootHash"])
+        to_root = _wire_hash_bytes(to_sth["rootHash"])
+    except ValueError as exc:
+        return VerifyResult(reject_category="PARSE_ERROR", reason=str(exc))
+    if not _verify_merkle_consistency(from_size, to_size, path, from_root, to_root):
+        return VerifyResult(reject_category="PROOF_INVALID", reason="consistencyPath does not connect fromSignedTreeHead.rootHash to toSignedTreeHead.rootHash (append-only claim broken)")
+    return VerifyResult(accepted=True, ed25519_valid=True, sigs_expected=2, sigs_valid=2)
+
+
+def verify_revocation_list(fixture: dict[str, Any]) -> VerifyResult:
+    """ATP §8.1: structural verification of the unsigned revocation body. A
+    malformed timestamp rejects the WHOLE response — skipping unparseable
+    entries keeps a revoked agent trusted."""
+    rl = fixture.get("revocationList")
+    if not rl:
+        return VerifyResult(reject_category="PARSE_ERROR", reason="revocationList missing")
+
+    def _parse_rfc3339_strict(value: str) -> None:
+        # Python's fromisoformat accepts a space separator and zone-less
+        # timestamps; the wire rule is RFC 3339 (as Go's time.RFC3339 layout
+        # enforces), so require the 'T' separator and a zone designator.
+        if "T" not in value:
+            raise ValueError("missing 'T' date/time separator")
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            raise ValueError("missing zone designator")
+
+    next_since = rl.get("nextSince")
+    if not next_since:
+        return VerifyResult(reject_category="PARSE_ERROR", reason="nextSince missing")
+    try:
+        _parse_rfc3339_strict(str(next_since))
+    except ValueError as exc:
+        return VerifyResult(reject_category="PARSE_ERROR", reason=f"nextSince is not RFC 3339: {exc}")
+    for i, entry in enumerate(rl.get("revocations", [])):
+        agent_did = entry.get("agentDid", "")
+        if not agent_did.startswith("did:"):
+            return VerifyResult(reject_category="PARSE_ERROR", reason=f"revocations[{i}].agentDid {agent_did!r} is not a DID")
+        try:
+            _parse_rfc3339_strict(str(entry["revokedAt"]))
+        except (KeyError, ValueError) as exc:
+            return VerifyResult(reject_category="PARSE_ERROR", reason=f"revocations[{i}].revokedAt is not RFC 3339: {exc}")
+        if not entry.get("reason"):
+            return VerifyResult(reject_category="PARSE_ERROR", reason=f"revocations[{i}].reason missing")
+        if int(entry.get("transparencyLogIndex", -1)) < 0:
+            return VerifyResult(reject_category="PARSE_ERROR", reason=f"revocations[{i}].transparencyLogIndex must be >= 0")
+        if "#" not in entry.get("revokedByKeyId", ""):
+            return VerifyResult(reject_category="PARSE_ERROR", reason=f"revocations[{i}].revokedByKeyId is not fragment-qualified")
+    return VerifyResult(accepted=True)
+
+
+# ---------------------------------------------------------------------------
 # driver
 # ---------------------------------------------------------------------------
 
@@ -314,6 +528,12 @@ def verify_fixture(fixture: dict[str, Any]) -> VerifyResult:
         return verify_trust_proof(fixture)
     if ft == "sth":
         return verify_sth(fixture)
+    if ft == "inclusionProof":
+        return verify_inclusion_proof(fixture)
+    if ft == "consistencyProof":
+        return verify_consistency_proof(fixture)
+    if ft == "revocationList":
+        return verify_revocation_list(fixture)
     return VerifyResult(reject_category="PARSE_ERROR", reason=f"unknown fixtureType {ft!r}")
 
 

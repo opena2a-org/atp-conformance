@@ -39,24 +39,27 @@ What this suite verifies:
 | ATP §4.4 step 2 must-reject: untrusted issuer (valid signature, issuer not in trusted set) | `fixtures/trust-proof-untrusted-issuer.json` |
 | ATP §4.4 step 4 must-reject: tampered Ed25519 signature (first byte XOR 0xFF) | `fixtures/trust-proof-tampered-signature.json` |
 | ATP §5.6 Signed Tree Head | `fixtures/transparency-log-sth.json` |
+| ATP §5.4 inclusion proof (RFC 6962 §2.1.1 audit path over the deterministic 8-leaf tree; RFC 9162 §2.1.3.2 verification) | `fixtures/transparency-inclusion-proof-valid.json` |
+| ATP §5.4 must-reject: tampered audit path (first byte of `auditPath[0]` XOR 0xFF; STH still verifies, only the root recomputation catches it) | `fixtures/transparency-inclusion-proof-tampered-path.json` |
+| ATP §5.5 consistency proof (4-leaf to 8-leaf growth; RFC 9162 §2.1.4.2 verification against both signed tree heads) | `fixtures/transparency-consistency-proof-valid.json` |
+| ATP §5.5 must-reject: tampered consistency path (append-only claim broken) | `fixtures/transparency-consistency-proof-tampered-path.json` |
+| ATP §8.1 revocation response (the spec example bytes; structural rules — the body is unsigned by design) | `fixtures/revocation-list-valid.json` |
+| ATP §8.1 must-reject: malformed `revokedAt` timestamp (skipping an unparseable revocation keeps a revoked agent trusted) | `fixtures/revocation-list-malformed-timestamp.json` |
 
 Each negative fixture is valid in every respect except the one defect it
 pins, so a verifier that skips that verification step (and only that step)
 wrongly ACCEPTs it. Expected outcomes pin the reject category
-(`EXPIRED`, `UNTRUSTED_ISSUER`, `SIGNATURE_INVALID`), so rejecting for the
-wrong reason also fails.
+(`EXPIRED`, `UNTRUSTED_ISSUER`, `SIGNATURE_INVALID`, `PROOF_INVALID`,
+`PARSE_ERROR`), so rejecting for the wrong reason also fails.
 
-What this suite does NOT verify in v0.2 (deferred to v0.3+):
+What this suite does NOT verify (v0.3):
 
-- Transparency log inclusion proofs (ATP §5.4). Byte-stability requires a
-  pinned tree-state fixture, which is bigger than the marginal coverage.
-- Consistency proofs (ATP §5.5). Same reason.
-- Revocation CRL entries (ATP §8.1). Revocation events live on the
-  transparency log; CRL-style fixtures are redundant once revocation events
-  are byte-stable.
 - Federation cosignature (ATP §6, Level 3). Production has no second
   authority to source a real cosigned proof from. Will be added once a real
   federation peer exists.
+- §8.1 response authenticity. The spec does not sign the revocation body
+  (transport plus each entry's `transparencyLogIndex` carry authenticity);
+  the fixtures cover the structural rules only.
 
 The full requirement-to-fixture mapping is machine-readable in
 [`conformance.json`](./conformance.json), regenerated from the fixtures by

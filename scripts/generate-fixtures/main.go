@@ -4,11 +4,14 @@
 // encoding settings. Re-running the generator MUST produce identical bytes;
 // MANIFEST.sha256 pins each fixture.
 //
-// Spec coverage of v0.1:
-//   - discovery-valid           ATP §7.1 well-known discovery
-//   - trust-proof-baseline      ATP §4.2 + §4.3 single-signer Ed25519
-//   - trust-proof-hybrid        ATP §4.3 hybrid Ed25519 + ML-DSA-65
-//   - transparency-log-sth      ATP §5.6 Signed Tree Head
+// Spec coverage:
+//   - discovery-valid                                       ATP §7.1 well-known discovery
+//   - trust-proof-baseline / trust-proof-hybrid             ATP §4.2 + §4.3 (Ed25519, hybrid ML-DSA-65)
+//   - trust-proof-{expired,untrusted-issuer,tampered-signature}  ATP §4.4 negatives
+//   - transparency-log-sth                                  ATP §5.6 Signed Tree Head
+//   - transparency-inclusion-proof-{valid,tampered-path}    ATP §5.4 / RFC 6962 §2.1.1
+//   - transparency-consistency-proof-{valid,tampered-path}  ATP §5.5 / RFC 6962 §2.1.2
+//   - revocation-list-{valid,malformed-timestamp}           ATP §8.1 structural
 //
 // Canonical signing form for trust proofs (ATP §4.3):
 //
@@ -79,17 +82,20 @@ type ExpectedOutcome struct {
 // Fixture is the language-agnostic wrapper. Exactly one of the
 // fixtureType-specific payload fields is populated per fixture.
 type Fixture struct {
-	Schema             string             `json:"$schema"`
-	Name               string             `json:"name"`
-	Description        string             `json:"description"`
-	FixtureType        string             `json:"fixtureType"`
-	Spec               []SpecRef          `json:"spec"`
-	KeypairRefs        []KeypairRef       `json:"keypairRefs"`
-	VerifierState      VerifierState      `json:"verifierState"`
-	Expected           ExpectedOutcome    `json:"expected"`
-	DiscoveryResponse  *DiscoveryResponse `json:"discoveryResponse,omitempty"`
-	TrustProof         *TrustProof        `json:"trustProof,omitempty"`
-	SignedTreeHead     *SignedTreeHead    `json:"signedTreeHead,omitempty"`
+	Schema            string             `json:"$schema"`
+	Name              string             `json:"name"`
+	Description       string             `json:"description"`
+	FixtureType       string             `json:"fixtureType"`
+	Spec              []SpecRef          `json:"spec"`
+	KeypairRefs       []KeypairRef       `json:"keypairRefs"`
+	VerifierState     VerifierState      `json:"verifierState"`
+	Expected          ExpectedOutcome    `json:"expected"`
+	DiscoveryResponse *DiscoveryResponse `json:"discoveryResponse,omitempty"`
+	TrustProof        *TrustProof        `json:"trustProof,omitempty"`
+	SignedTreeHead    *SignedTreeHead    `json:"signedTreeHead,omitempty"`
+	InclusionProof    *InclusionProof    `json:"inclusionProof,omitempty"`
+	ConsistencyProof  *ConsistencyProof  `json:"consistencyProof,omitempty"`
+	RevocationList    *RevocationList    `json:"revocationList,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -99,26 +105,26 @@ type Fixture struct {
 // DiscoveryResponse mirrors ATP §7.1 well-known/atp shape. Field order is
 // pinned for byte-stability.
 type DiscoveryResponse struct {
-	AuthorityDID     string                  `json:"authorityDid"`
-	Version          string                  `json:"version"`
-	ConformanceLevel int                     `json:"conformanceLevel"`
-	Endpoints        DiscoveryEndpoints      `json:"endpoints"`
-	PublicKeys       []DiscoveryPublicKey    `json:"publicKeys"`
-	SupportedMethods []string                `json:"supportedMethods"`
-	Capabilities     []string                `json:"capabilities"`
-	FederationPeers  []string                `json:"federationPeers,omitempty"`
+	AuthorityDID     string               `json:"authorityDid"`
+	Version          string               `json:"version"`
+	ConformanceLevel int                  `json:"conformanceLevel"`
+	Endpoints        DiscoveryEndpoints   `json:"endpoints"`
+	PublicKeys       []DiscoveryPublicKey `json:"publicKeys"`
+	SupportedMethods []string             `json:"supportedMethods"`
+	Capabilities     []string             `json:"capabilities"`
+	FederationPeers  []string             `json:"federationPeers,omitempty"`
 }
 
 type DiscoveryEndpoints struct {
-	DIDResolve         string `json:"didResolve"`
-	TrustProof         string `json:"trustProof"`
-	TrustVerify        string `json:"trustVerify"`
-	TrustBatch         string `json:"trustBatch"`
-	TransparencyLog    string `json:"transparencyLog"`
-	TransparencyProof  string `json:"transparencyProof"`
-	TransparencySTH    string `json:"transparencySth"`
-	Revocations        string `json:"revocations"`
-	Federation         string `json:"federation,omitempty"`
+	DIDResolve        string `json:"didResolve"`
+	TrustProof        string `json:"trustProof"`
+	TrustVerify       string `json:"trustVerify"`
+	TrustBatch        string `json:"trustBatch"`
+	TransparencyLog   string `json:"transparencyLog"`
+	TransparencyProof string `json:"transparencyProof"`
+	TransparencySTH   string `json:"transparencySth"`
+	Revocations       string `json:"revocations"`
+	Federation        string `json:"federation,omitempty"`
 }
 
 type DiscoveryPublicKey struct {
@@ -131,15 +137,15 @@ type DiscoveryPublicKey struct {
 
 // TrustProof mirrors ATP §4.2 proof shape.
 type TrustProof struct {
-	DID                  string             `json:"did"`
-	TrustLevel           int                `json:"trustLevel"`
-	TrustScore           float64            `json:"trustScore"`
-	Verdict              string             `json:"verdict"`
-	IssuedAt             string             `json:"issuedAt"`
-	ExpiresAt            string             `json:"expiresAt"`
-	IssuerDID            string             `json:"issuerDid"`
-	Signatures           []ProofSignature   `json:"signatures"`
-	TransparencyLogIndex int64              `json:"transparencyLogIndex,omitempty"`
+	DID                  string           `json:"did"`
+	TrustLevel           int              `json:"trustLevel"`
+	TrustScore           float64          `json:"trustScore"`
+	Verdict              string           `json:"verdict"`
+	IssuedAt             string           `json:"issuedAt"`
+	ExpiresAt            string           `json:"expiresAt"`
+	IssuerDID            string           `json:"issuerDid"`
+	Signatures           []ProofSignature `json:"signatures"`
+	TransparencyLogIndex int64            `json:"transparencyLogIndex,omitempty"`
 }
 
 type ProofSignature struct {
@@ -156,6 +162,44 @@ type SignedTreeHead struct {
 	RootHash  string `json:"rootHash"`
 	SignedBy  string `json:"signedBy"`
 	Signature string `json:"signature"`
+}
+
+// InclusionProof mirrors ATP §5.4: the RFC 6962 §2.1.1 audit path for the
+// entry at logIndex, together with the signed tree head the recomputed root
+// must equal. Verification is two rules: the STH verifies per §5.6, and
+// MTH-recomputation from leafHash along auditPath equals sth.rootHash.
+type InclusionProof struct {
+	LogIndex       int64           `json:"logIndex"`
+	LeafHash       string          `json:"leafHash"`
+	AuditPath      []string        `json:"auditPath"`
+	SignedTreeHead *SignedTreeHead `json:"signedTreeHead"`
+}
+
+// ConsistencyProof mirrors ATP §5.5: the RFC 6962 §2.1.2 consistency path
+// between two tree states, together with both signed tree heads. Verification
+// is three rules: both STHs verify per §5.6, and the §2.1.2 algorithm
+// reproduces BOTH roots from the path.
+type ConsistencyProof struct {
+	FromSize           int64           `json:"fromSize"`
+	ToSize             int64           `json:"toSize"`
+	ConsistencyPath    []string        `json:"consistencyPath"`
+	FromSignedTreeHead *SignedTreeHead `json:"fromSignedTreeHead"`
+	ToSignedTreeHead   *SignedTreeHead `json:"toSignedTreeHead"`
+}
+
+// RevocationList mirrors ATP §8.1. The body is structural (unsigned in the
+// spec — authenticity rides on TLS and each entry's transparencyLogIndex).
+type RevocationList struct {
+	Revocations []RevocationEntry `json:"revocations"`
+	NextSince   string            `json:"nextSince"`
+}
+
+type RevocationEntry struct {
+	AgentDID             string `json:"agentDid"`
+	RevokedAt            string `json:"revokedAt"`
+	Reason               string `json:"reason"`
+	TransparencyLogIndex int64  `json:"transparencyLogIndex"`
+	RevokedByKeyID       string `json:"revokedByKeyId"`
 }
 
 // ---------------------------------------------------------------------------
@@ -192,6 +236,171 @@ func normalizeRFC3339(s string) string {
 	t, err := time.Parse(time.RFC3339, s)
 	must(err)
 	return t.UTC().Format(time.RFC3339)
+}
+
+// ---------------------------------------------------------------------------
+// RFC 6962 Merkle tree (transparency-log proofs, §5.4/§5.5)
+//
+// leaf = SHA-256(0x00 || entry), node = SHA-256(0x01 || left || right).
+// Generation follows RFC 6962 §2.1.1 (PATH) and §2.1.2 (PROOF/SUBPROOF);
+// verification follows the iterative algorithms of RFC 9162 §2.1.3.2 and
+// §2.1.4.2. The generator VERIFIES every proof it emits (see the self-checks
+// in main), so a math error here cannot silently pin bad fixture bytes.
+// Mirror the verification algorithms VERBATIM in both reference verifiers.
+// ---------------------------------------------------------------------------
+
+func merkleLeafHash(entry []byte) [sha256.Size]byte {
+	return sha256.Sum256(append([]byte{0x00}, entry...))
+}
+
+func merkleNodeHash(left, right [sha256.Size]byte) [sha256.Size]byte {
+	buf := make([]byte, 0, 1+2*sha256.Size)
+	buf = append(buf, 0x01)
+	buf = append(buf, left[:]...)
+	buf = append(buf, right[:]...)
+	return sha256.Sum256(buf)
+}
+
+// largestPowerOfTwoBelow returns the largest power of two STRICTLY less than
+// n (RFC 6962's k, with k < n <= 2k). n must be >= 2.
+func largestPowerOfTwoBelow(n int) int {
+	k := 1
+	for k*2 < n {
+		k *= 2
+	}
+	return k
+}
+
+// merkleTreeHash computes MTH(D[n]) per RFC 6962 §2.1.
+func merkleTreeHash(leaves [][sha256.Size]byte) [sha256.Size]byte {
+	switch n := len(leaves); n {
+	case 0:
+		return sha256.Sum256(nil)
+	case 1:
+		return leaves[0]
+	default:
+		k := largestPowerOfTwoBelow(n)
+		return merkleNodeHash(merkleTreeHash(leaves[:k]), merkleTreeHash(leaves[k:]))
+	}
+}
+
+// merkleAuditPath computes PATH(m, D[n]) per RFC 6962 §2.1.1.
+func merkleAuditPath(m int, leaves [][sha256.Size]byte) [][sha256.Size]byte {
+	n := len(leaves)
+	if n <= 1 {
+		return nil
+	}
+	k := largestPowerOfTwoBelow(n)
+	if m < k {
+		return append(merkleAuditPath(m, leaves[:k]), merkleTreeHash(leaves[k:]))
+	}
+	return append(merkleAuditPath(m-k, leaves[k:]), merkleTreeHash(leaves[:k]))
+}
+
+// merkleConsistencyProof computes PROOF(m, D[n]) per RFC 6962 §2.1.2.
+func merkleConsistencyProof(m int, leaves [][sha256.Size]byte) [][sha256.Size]byte {
+	return merkleSubProof(m, leaves, true)
+}
+
+func merkleSubProof(m int, leaves [][sha256.Size]byte, b bool) [][sha256.Size]byte {
+	n := len(leaves)
+	if m == n {
+		if b {
+			return nil
+		}
+		return [][sha256.Size]byte{merkleTreeHash(leaves)}
+	}
+	k := largestPowerOfTwoBelow(n)
+	if m <= k {
+		return append(merkleSubProof(m, leaves[:k], b), merkleTreeHash(leaves[k:]))
+	}
+	return append(merkleSubProof(m-k, leaves[k:], false), merkleTreeHash(leaves[:k]))
+}
+
+// verifyMerkleInclusion checks an audit path per RFC 9162 §2.1.3.2.
+func verifyMerkleInclusion(leafIndex, treeSize int64, leafHash [sha256.Size]byte, path [][sha256.Size]byte, root [sha256.Size]byte) bool {
+	if leafIndex < 0 || treeSize < 1 || leafIndex >= treeSize {
+		return false
+	}
+	fn, sn := leafIndex, treeSize-1
+	r := leafHash
+	for _, p := range path {
+		if sn == 0 {
+			return false
+		}
+		if fn%2 == 1 || fn == sn {
+			r = merkleNodeHash(p, r)
+			if fn%2 == 0 {
+				for fn%2 == 0 && fn != 0 {
+					fn >>= 1
+					sn >>= 1
+				}
+			}
+		} else {
+			r = merkleNodeHash(r, p)
+		}
+		fn >>= 1
+		sn >>= 1
+	}
+	return sn == 0 && r == root
+}
+
+// verifyMerkleConsistency checks a consistency path per RFC 9162 §2.1.4.2.
+func verifyMerkleConsistency(fromSize, toSize int64, path [][sha256.Size]byte, fromRoot, toRoot [sha256.Size]byte) bool {
+	if fromSize < 1 || fromSize > toSize {
+		return false
+	}
+	if fromSize == toSize {
+		return len(path) == 0 && fromRoot == toRoot
+	}
+	// If fromSize is an exact power of two, the first component is implicitly
+	// the old root itself.
+	full := path
+	if fromSize&(fromSize-1) == 0 {
+		full = append([][sha256.Size]byte{fromRoot}, path...)
+	}
+	if len(full) == 0 {
+		return false
+	}
+	fn, sn := fromSize-1, toSize-1
+	for fn%2 == 1 {
+		fn >>= 1
+		sn >>= 1
+	}
+	fr, sr := full[0], full[0]
+	for _, c := range full[1:] {
+		if sn == 0 {
+			return false
+		}
+		if fn%2 == 1 || fn == sn {
+			fr = merkleNodeHash(c, fr)
+			sr = merkleNodeHash(c, sr)
+			if fn%2 == 0 {
+				for fn%2 == 0 && fn != 0 {
+					fn >>= 1
+					sn >>= 1
+				}
+			}
+		} else {
+			sr = merkleNodeHash(sr, c)
+		}
+		fn >>= 1
+		sn >>= 1
+	}
+	return sn == 0 && fr == fromRoot && sr == toRoot
+}
+
+func hashToWire(h [sha256.Size]byte) string {
+	return "SHA256:" + hex.EncodeToString(h[:])
+}
+
+// flipFirstHashByte deterministically corrupts a "SHA256:<hex>" wire hash by
+// XORing its first raw byte with 0xFF (the same byte-stable corruption
+// pattern as flipFirstSignatureByte).
+func flipFirstHashByte(wire string) string {
+	raw := sthSignedBytes(wire)
+	raw[0] ^= 0xFF
+	return "SHA256:" + hex.EncodeToString(raw)
 }
 
 // ---------------------------------------------------------------------------
@@ -253,11 +462,11 @@ func signMLDSA65(seedHex string, payload []byte) (sig ProofSignature, pubKeyHex 
 
 // Pinned values used across fixtures.
 var (
-	testAgentDID    = "did:opena2a:mcp_server:agent_conformance_test_001"
+	testAgentDID     = "did:opena2a:mcp_server:agent_conformance_test_001"
 	testAuthorityDID = "did:opena2a:authority:opena2a.org"
-	testIssuedAt    = "2026-05-23T00:00:00Z"
-	testExpiresAt   = "2099-12-31T23:59:59Z"
-	testValidFrom   = "2026-01-01T00:00:00Z"
+	testIssuedAt     = "2026-05-23T00:00:00Z"
+	testExpiresAt    = "2099-12-31T23:59:59Z"
+	testValidFrom    = "2026-01-01T00:00:00Z"
 	// Deterministic root-hash: SHA-256("opena2a-atp-conformance-sth-v0.1") padded
 	// nowhere; computed at init().
 	testRootHashHex string
@@ -268,6 +477,102 @@ func init() {
 	h := sha256.Sum256([]byte("opena2a-atp-conformance-sth-v0.1"))
 	testRootHashHex = hex.EncodeToString(h[:])
 	testRootHash = "SHA256:" + testRootHashHex
+}
+
+// Deterministic transparency-log tree for the §5.4/§5.5 fixtures: eight
+// fixed leaf entries; the from-state is the first four. The pinned
+// transparency-log-sth fixture (constant root) is UNTOUCHED — these fixtures
+// carry their own real-tree STHs so the Merkle math is genuinely checkable.
+const (
+	proofTreeToSize   = 8
+	proofTreeFromSize = 4
+	proofLeafIndex    = 3
+	fromSTHTimestamp  = "2026-05-22T00:00:00Z"
+	toSTHTimestamp    = "2026-05-23T00:00:00Z"
+)
+
+func proofTreeLeaves(n int) [][sha256.Size]byte {
+	leaves := make([][sha256.Size]byte, n)
+	for i := 0; i < n; i++ {
+		leaves[i] = merkleLeafHash([]byte(fmt.Sprintf("opena2a-atp-conformance-leaf-%d", i)))
+	}
+	return leaves
+}
+
+func newProofSTH(primary keyVector, treeSize int64, timestamp string, rootWire string) SignedTreeHead {
+	sig := signEd25519(primary.SeedHex, sthSignedBytes(rootWire))
+	return SignedTreeHead{
+		TreeSize:  treeSize,
+		Timestamp: timestamp,
+		RootHash:  rootWire,
+		SignedBy:  primary.KeyID,
+		Signature: sig.Value,
+	}
+}
+
+// newInclusionProof builds the §5.4 fixture payload over the deterministic
+// 8-leaf tree and panics unless its own verification algorithm accepts it.
+func newInclusionProof(primary keyVector) InclusionProof {
+	leaves := proofTreeLeaves(proofTreeToSize)
+	root := merkleTreeHash(leaves)
+	path := merkleAuditPath(proofLeafIndex, leaves)
+	if !verifyMerkleInclusion(proofLeafIndex, proofTreeToSize, leaves[proofLeafIndex], path, root) {
+		panic("generator self-check failed: inclusion proof does not verify")
+	}
+	wirePath := make([]string, len(path))
+	for i, p := range path {
+		wirePath[i] = hashToWire(p)
+	}
+	sth := newProofSTH(primary, proofTreeToSize, toSTHTimestamp, hashToWire(root))
+	return InclusionProof{
+		LogIndex:       proofLeafIndex,
+		LeafHash:       hashToWire(leaves[proofLeafIndex]),
+		AuditPath:      wirePath,
+		SignedTreeHead: &sth,
+	}
+}
+
+// newConsistencyProof builds the §5.5 fixture payload between the 4-leaf and
+// 8-leaf states and panics unless its own verification algorithm accepts it.
+func newConsistencyProof(primary keyVector) ConsistencyProof {
+	from := proofTreeLeaves(proofTreeFromSize)
+	to := proofTreeLeaves(proofTreeToSize)
+	fromRoot := merkleTreeHash(from)
+	toRoot := merkleTreeHash(to)
+	path := merkleConsistencyProof(proofTreeFromSize, to)
+	if !verifyMerkleConsistency(proofTreeFromSize, proofTreeToSize, path, fromRoot, toRoot) {
+		panic("generator self-check failed: consistency proof does not verify")
+	}
+	wirePath := make([]string, len(path))
+	for i, p := range path {
+		wirePath[i] = hashToWire(p)
+	}
+	fromSTH := newProofSTH(primary, proofTreeFromSize, fromSTHTimestamp, hashToWire(fromRoot))
+	toSTH := newProofSTH(primary, proofTreeToSize, toSTHTimestamp, hashToWire(toRoot))
+	return ConsistencyProof{
+		FromSize:           proofTreeFromSize,
+		ToSize:             proofTreeToSize,
+		ConsistencyPath:    wirePath,
+		FromSignedTreeHead: &fromSTH,
+		ToSignedTreeHead:   &toSTH,
+	}
+}
+
+// newRevocationList is the ATP §8.1 example body VERBATIM — the spec example
+// and the fixture bytes are the same object, the §5.6 ratification pattern.
+func newRevocationList() RevocationList {
+	return RevocationList{
+		Revocations: []RevocationEntry{
+			{
+				AgentDID:             "did:opena2a:mcp_server:compromised-package",
+				RevokedAt:            "2026-03-22T15:00:00Z",
+				Reason:               "Supply chain compromise detected",
+				TransparencyLogIndex: 1847300,
+				RevokedByKeyID:       "did:opena2a:authority:opena2a.org#key-v3",
+			},
+		},
+		NextSince: "2026-03-22T15:00:00Z",
+	}
 }
 
 func main() {
@@ -311,14 +616,14 @@ func main() {
 		{"fixtures/discovery-valid.json", func() Fixture {
 			disc := newDiscoveryResponse(primary, mldsa)
 			return Fixture{
-				Schema:        "https://atp.opena2a.org/schemas/fixture-v1.json",
-				Name:          "atp-v1/discovery-valid",
-				Description:   "A well-formed ATP discovery response from /.well-known/atp per ATP §7.1. All required fields present, conformanceLevel within range, publicKeys structurally valid. Verifier MUST ACCEPT.",
-				FixtureType:   "discovery",
-				Spec:          specRefs("§7.1 Well-Known Endpoint"),
-				KeypairRefs:   []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
-				VerifierState: hybridVerifierState,
-				Expected:      ExpectedOutcome{VerifyResult: "ACCEPT"},
+				Schema:            "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:              "atp-v1/discovery-valid",
+				Description:       "A well-formed ATP discovery response from /.well-known/atp per ATP §7.1. All required fields present, conformanceLevel within range, publicKeys structurally valid. Verifier MUST ACCEPT.",
+				FixtureType:       "discovery",
+				Spec:              specRefs("§7.1 Well-Known Endpoint"),
+				KeypairRefs:       []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState:     hybridVerifierState,
+				Expected:          ExpectedOutcome{VerifyResult: "ACCEPT"},
 				DiscoveryResponse: &disc,
 			}
 		}},
@@ -347,11 +652,11 @@ func main() {
 			pq.KeyID = mldsa.KeyID
 			tp.Signatures = []ProofSignature{ed, pq}
 			return Fixture{
-				Schema:        "https://atp.opena2a.org/schemas/fixture-v1.json",
-				Name:          "atp-v1/trust-proof-hybrid",
-				Description:   "A trust proof carrying BOTH an Ed25519 signature AND an ML-DSA-65 signature (FIPS 204) over the same canonical payload per ATP §4.3 hybrid signing path. Production reference at api.oa2a.org emits hybrid proofs today; this fixture pins that wire format. A spec-conformant Go verifier MUST verify BOTH signatures. The Python reference verifier records ML-DSA-65 as present-but-out-of-scope. Verifier MUST ACCEPT.",
-				FixtureType:   "trustProof",
-				Spec:          specRefs("§4.3 Signing (hybrid mode)", "FIPS 204 ML-DSA-65"),
+				Schema:      "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:        "atp-v1/trust-proof-hybrid",
+				Description: "A trust proof carrying BOTH an Ed25519 signature AND an ML-DSA-65 signature (FIPS 204) over the same canonical payload per ATP §4.3 hybrid signing path. Production reference at api.oa2a.org emits hybrid proofs today; this fixture pins that wire format. A spec-conformant Go verifier MUST verify BOTH signatures. The Python reference verifier records ML-DSA-65 as present-but-out-of-scope. Verifier MUST ACCEPT.",
+				FixtureType: "trustProof",
+				Spec:        specRefs("§4.3 Signing (hybrid mode)", "FIPS 204 ML-DSA-65"),
 				KeypairRefs: []KeypairRef{
 					keypairRefFor(primary, "vectors/issuer-primary.json"),
 					{Role: mldsa.Role, Path: "vectors/mldsa65-seed.json", Algorithm: mldsa.Algorithm, PublicKeyHex: mldsa.PublicKeyHex, KeyID: mldsa.KeyID},
@@ -364,14 +669,14 @@ func main() {
 		{"fixtures/transparency-log-sth.json", func() Fixture {
 			sth := newSignedTreeHead(primary)
 			return Fixture{
-				Schema:        "https://atp.opena2a.org/schemas/fixture-v1.json",
-				Name:          "atp-v1/transparency-log-sth",
-				Description:   "A Signed Tree Head per ATP §5.6: treeSize, timestamp, rootHash (\"SHA256:\" + 64 hex chars), Ed25519 signature over the raw 32-byte decoded rootHash. Compatible with RFC 6962 §3.5 Certificate Transparency monitor expectations. Verifier MUST ACCEPT.",
-				FixtureType:   "sth",
-				Spec:          specRefs("§5.6 Signed Tree Head", "RFC 6962 §3.5"),
-				KeypairRefs:   []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
-				VerifierState: defaultVerifierState,
-				Expected:      ExpectedOutcome{VerifyResult: "ACCEPT"},
+				Schema:         "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:           "atp-v1/transparency-log-sth",
+				Description:    "A Signed Tree Head per ATP §5.6: treeSize, timestamp, rootHash (\"SHA256:\" + 64 hex chars), Ed25519 signature over the raw 32-byte decoded rootHash. Compatible with RFC 6962 §3.5 Certificate Transparency monitor expectations. Verifier MUST ACCEPT.",
+				FixtureType:    "sth",
+				Spec:           specRefs("§5.6 Signed Tree Head", "RFC 6962 §3.5"),
+				KeypairRefs:    []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState:  defaultVerifierState,
+				Expected:       ExpectedOutcome{VerifyResult: "ACCEPT"},
 				SignedTreeHead: &sth,
 			}
 		}},
@@ -445,6 +750,93 @@ func main() {
 				VerifierState: defaultVerifierState,
 				Expected:      ExpectedOutcome{VerifyResult: "REJECT", RejectCategory: "SIGNATURE_INVALID", ReasonContains: "did not verify"},
 				TrustProof:    &tp,
+			}
+		}},
+		{"fixtures/transparency-inclusion-proof-valid.json", func() Fixture {
+			ip := newInclusionProof(primary)
+			return Fixture{
+				Schema:         "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:           "atp-v1/transparency-inclusion-proof-valid",
+				Description:    "An RFC 6962 audit path for log entry 3 of the deterministic 8-leaf conformance tree, with the signed tree head over that tree's real root. The STH verifies per ATP §5.6 and recomputing the root from leafHash along auditPath reproduces sth.rootHash per §5.4. Verifier MUST ACCEPT.",
+				FixtureType:    "inclusionProof",
+				Spec:           specRefs("§5.4 Inclusion Proof, RFC 6962 §2.1.1"),
+				KeypairRefs:    []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState:  defaultVerifierState,
+				Expected:       ExpectedOutcome{VerifyResult: "ACCEPT"},
+				InclusionProof: &ip,
+			}
+		}},
+		{"fixtures/transparency-inclusion-proof-tampered-path.json", func() Fixture {
+			ip := newInclusionProof(primary)
+			ip.AuditPath[0] = flipFirstHashByte(ip.AuditPath[0])
+			return Fixture{
+				Schema:         "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:           "atp-v1/transparency-inclusion-proof-tampered-path",
+				Description:    "The valid inclusion proof with the first byte of auditPath[0] deterministically corrupted (XOR 0xFF). The STH still verifies, so only the RFC 6962 root recomputation can catch it: the recomputed root no longer equals sth.rootHash. Verifier MUST REJECT with category PROOF_INVALID.",
+				FixtureType:    "inclusionProof",
+				Spec:           specRefs("§5.4 Inclusion Proof, RFC 6962 §2.1.1"),
+				KeypairRefs:    []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState:  defaultVerifierState,
+				Expected:       ExpectedOutcome{VerifyResult: "REJECT", RejectCategory: "PROOF_INVALID", ReasonContains: "root"},
+				InclusionProof: &ip,
+			}
+		}},
+		{"fixtures/transparency-consistency-proof-valid.json", func() Fixture {
+			cp := newConsistencyProof(primary)
+			return Fixture{
+				Schema:           "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:             "atp-v1/transparency-consistency-proof-valid",
+				Description:      "An RFC 6962 consistency proof between the 4-leaf and 8-leaf states of the deterministic conformance tree, with both signed tree heads over the real roots. Both STHs verify per ATP §5.6 and the §2.1.2 algorithm reproduces both roots from consistencyPath per §5.5 — the append-only property. Verifier MUST ACCEPT.",
+				FixtureType:      "consistencyProof",
+				Spec:             specRefs("§5.5 Consistency Proof, RFC 6962 §2.1.2"),
+				KeypairRefs:      []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState:    defaultVerifierState,
+				Expected:         ExpectedOutcome{VerifyResult: "ACCEPT"},
+				ConsistencyProof: &cp,
+			}
+		}},
+		{"fixtures/transparency-consistency-proof-tampered-path.json", func() Fixture {
+			cp := newConsistencyProof(primary)
+			cp.ConsistencyPath[0] = flipFirstHashByte(cp.ConsistencyPath[0])
+			return Fixture{
+				Schema:           "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:             "atp-v1/transparency-consistency-proof-tampered-path",
+				Description:      "The valid consistency proof with the first byte of consistencyPath[0] deterministically corrupted (XOR 0xFF). Both STHs still verify, so only the RFC 6962 §2.1.2 recomputation can catch it — a log that cannot produce a valid path between two published roots has broken its append-only claim. Verifier MUST REJECT with category PROOF_INVALID.",
+				FixtureType:      "consistencyProof",
+				Spec:             specRefs("§5.5 Consistency Proof, RFC 6962 §2.1.2"),
+				KeypairRefs:      []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState:    defaultVerifierState,
+				Expected:         ExpectedOutcome{VerifyResult: "REJECT", RejectCategory: "PROOF_INVALID", ReasonContains: "root"},
+				ConsistencyProof: &cp,
+			}
+		}},
+		{"fixtures/revocation-list-valid.json", func() Fixture {
+			rl := newRevocationList()
+			return Fixture{
+				Schema:         "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:           "atp-v1/revocation-list-valid",
+				Description:    "The ATP §8.1 revocation response body, byte-identical to the spec's example. The body is structural: the spec does not sign the CRL (authenticity rides on TLS and each entry's transparencyLogIndex), so verification checks required members and RFC 3339 timestamps. Verifier MUST ACCEPT.",
+				FixtureType:    "revocationList",
+				Spec:           specRefs("§8.1 Trust Proof Revocation"),
+				KeypairRefs:    []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState:  defaultVerifierState,
+				Expected:       ExpectedOutcome{VerifyResult: "ACCEPT"},
+				RevocationList: &rl,
+			}
+		}},
+		{"fixtures/revocation-list-malformed-timestamp.json", func() Fixture {
+			rl := newRevocationList()
+			rl.Revocations[0].RevokedAt = "2026-03-22 15:00:00" // space, not RFC 3339
+			return Fixture{
+				Schema:         "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:           "atp-v1/revocation-list-malformed-timestamp",
+				Description:    "The §8.1 body with revokedAt spelled with a space instead of the RFC 3339 'T' separator. A client that caches revocations keyed on parse failures silently keeps trusting a revoked agent, so malformed timestamps MUST be rejected, not skipped. Verifier MUST REJECT with category PARSE_ERROR.",
+				FixtureType:    "revocationList",
+				Spec:           specRefs("§8.1 Trust Proof Revocation"),
+				KeypairRefs:    []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState:  defaultVerifierState,
+				Expected:       ExpectedOutcome{VerifyResult: "REJECT", RejectCategory: "PARSE_ERROR", ReasonContains: "revokedAt"},
+				RevocationList: &rl,
 			}
 		}},
 	}

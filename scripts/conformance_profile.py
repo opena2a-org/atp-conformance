@@ -45,20 +45,12 @@ SUITE = {
     ],
     "notCovered": [
         {
-            "specSection": "§5.4 Transparency log inclusion proofs",
-            "reason": "byte-stability requires a pinned tree-state fixture; deferred",
-        },
-        {
-            "specSection": "§5.5 Consistency proofs",
-            "reason": "same pinned-tree-state requirement; deferred",
-        },
-        {
-            "specSection": "§8.1 Revocation CRL entries",
-            "reason": "revocation events live on the transparency log; CRL fixtures redundant once revocation events are byte-stable",
-        },
-        {
             "specSection": "§6 Federation cosignature (Level 3)",
             "reason": "no second production authority exists to source a real cosigned proof from",
+        },
+        {
+            "specSection": "§8.1 response authenticity",
+            "reason": "the spec does not sign the revocation body (transport + per-entry transparencyLogIndex carry authenticity); the fixtures cover the structural rules only",
         },
     ],
 }

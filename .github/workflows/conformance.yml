@@ -52,12 +52,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: opena2a-standards/agent-trust-protocol
-          ref: 6e0260b113a84a63a795fae90eb2aaefbe37ae8f
+          ref: ed7fc22c4ce212498559fb54bcedc5fb31f89af6
           path: .spec-src
 
       - name: Vendored schema drift gate (compare)
         run: |
-          for f in trust-proof-v1 signed-tree-head-v1 discovery-v1; do
+          for f in trust-proof-v1 signed-tree-head-v1 discovery-v1 inclusion-proof-v1 consistency-proof-v1 revocation-list-v1; do
             diff ".spec-src/schemas/$f.schema.json" \
                  "schemas/vendor/agent-trust-protocol/$f.schema.json"
           done
