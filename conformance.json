@@ -22,20 +22,12 @@
   ],
   "notCovered": [
     {
-      "specSection": "§5.4 Transparency log inclusion proofs",
-      "reason": "byte-stability requires a pinned tree-state fixture; deferred"
-    },
-    {
-      "specSection": "§5.5 Consistency proofs",
-      "reason": "same pinned-tree-state requirement; deferred"
-    },
-    {
-      "specSection": "§8.1 Revocation CRL entries",
-      "reason": "revocation events live on the transparency log; CRL fixtures redundant once revocation events are byte-stable"
-    },
-    {
       "specSection": "§6 Federation cosignature (Level 3)",
       "reason": "no second production authority exists to source a real cosigned proof from"
+    },
+    {
+      "specSection": "§8.1 response authenticity",
+      "reason": "the spec does not sign the revocation body (transport + per-entry transparencyLogIndex carry authenticity); the fixtures cover the structural rules only"
     }
   ],
   "requirements": [
@@ -63,6 +55,156 @@
       ],
       "expected": "ACCEPT",
       "description": "A well-formed ATP discovery response from /.well-known/atp per ATP §7.1. All required fields present, conformanceLevel within range, publicKeys structurally valid. Verifier MUST ACCEPT."
+    },
+    {
+      "fixture": "fixtures/revocation-list-malformed-timestamp.json",
+      "name": "atp-v1/revocation-list-malformed-timestamp",
+      "fixtureType": "revocationList",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§8.1 Trust Proof Revocation"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "REJECT[PARSE_ERROR]",
+      "description": "The §8.1 body with revokedAt spelled with a space instead of the RFC 3339 'T' separator. A client that caches revocations keyed on parse failures silently keeps trusting a revoked agent, so malformed timestamps MUST be rejected, not skipped. Verifier MUST REJECT with category PARSE_ERROR."
+    },
+    {
+      "fixture": "fixtures/revocation-list-valid.json",
+      "name": "atp-v1/revocation-list-valid",
+      "fixtureType": "revocationList",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§8.1 Trust Proof Revocation"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "ACCEPT",
+      "description": "The ATP §8.1 revocation response body, byte-identical to the spec's example. The body is structural: the spec does not sign the CRL (authenticity rides on TLS and each entry's transparencyLogIndex), so verification checks required members and RFC 3339 timestamps. Verifier MUST ACCEPT."
+    },
+    {
+      "fixture": "fixtures/transparency-consistency-proof-tampered-path.json",
+      "name": "atp-v1/transparency-consistency-proof-tampered-path",
+      "fixtureType": "consistencyProof",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§5.5 Consistency Proof, RFC 6962 §2.1.2"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "REJECT[PROOF_INVALID]",
+      "description": "The valid consistency proof with the first byte of consistencyPath[0] deterministically corrupted (XOR 0xFF). Both STHs still verify, so only the RFC 6962 §2.1.2 recomputation can catch it — a log that cannot produce a valid path between two published roots has broken its append-only claim. Verifier MUST REJECT with category PROOF_INVALID."
+    },
+    {
+      "fixture": "fixtures/transparency-consistency-proof-valid.json",
+      "name": "atp-v1/transparency-consistency-proof-valid",
+      "fixtureType": "consistencyProof",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§5.5 Consistency Proof, RFC 6962 §2.1.2"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "ACCEPT",
+      "description": "An RFC 6962 consistency proof between the 4-leaf and 8-leaf states of the deterministic conformance tree, with both signed tree heads over the real roots. Both STHs verify per ATP §5.6 and the §2.1.2 algorithm reproduces both roots from consistencyPath per §5.5 — the append-only property. Verifier MUST ACCEPT."
+    },
+    {
+      "fixture": "fixtures/transparency-inclusion-proof-tampered-path.json",
+      "name": "atp-v1/transparency-inclusion-proof-tampered-path",
+      "fixtureType": "inclusionProof",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§5.4 Inclusion Proof, RFC 6962 §2.1.1"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "REJECT[PROOF_INVALID]",
+      "description": "The valid inclusion proof with the first byte of auditPath[0] deterministically corrupted (XOR 0xFF). The STH still verifies, so only the RFC 6962 root recomputation can catch it: the recomputed root no longer equals sth.rootHash. Verifier MUST REJECT with category PROOF_INVALID."
+    },
+    {
+      "fixture": "fixtures/transparency-inclusion-proof-valid.json",
+      "name": "atp-v1/transparency-inclusion-proof-valid",
+      "fixtureType": "inclusionProof",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§5.4 Inclusion Proof, RFC 6962 §2.1.1"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "ACCEPT",
+      "description": "An RFC 6962 audit path for log entry 3 of the deterministic 8-leaf conformance tree, with the signed tree head over that tree's real root. The STH verifies per ATP §5.6 and recomputing the root from leafHash along auditPath reproduces sth.rootHash per §5.4. Verifier MUST ACCEPT."
     },
     {
       "fixture": "fixtures/transparency-log-sth.json",

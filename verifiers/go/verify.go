@@ -54,6 +54,40 @@ type fixture struct {
 	DiscoveryResponse *discoveryResponse `json:"discoveryResponse,omitempty"`
 	TrustProof        *trustProof        `json:"trustProof,omitempty"`
 	SignedTreeHead    *signedTreeHead    `json:"signedTreeHead,omitempty"`
+	InclusionProof    *inclusionProof    `json:"inclusionProof,omitempty"`
+	ConsistencyProof  *consistencyProof  `json:"consistencyProof,omitempty"`
+	RevocationList    *revocationList    `json:"revocationList,omitempty"`
+}
+
+// inclusionProof mirrors ATP §5.4 (see the generator for the wire contract).
+type inclusionProof struct {
+	LogIndex       int64           `json:"logIndex"`
+	LeafHash       string          `json:"leafHash"`
+	AuditPath      []string        `json:"auditPath"`
+	SignedTreeHead *signedTreeHead `json:"signedTreeHead"`
+}
+
+// consistencyProof mirrors ATP §5.5.
+type consistencyProof struct {
+	FromSize           int64           `json:"fromSize"`
+	ToSize             int64           `json:"toSize"`
+	ConsistencyPath    []string        `json:"consistencyPath"`
+	FromSignedTreeHead *signedTreeHead `json:"fromSignedTreeHead"`
+	ToSignedTreeHead   *signedTreeHead `json:"toSignedTreeHead"`
+}
+
+// revocationList mirrors ATP §8.1.
+type revocationList struct {
+	Revocations []revocationEntry `json:"revocations"`
+	NextSince   string            `json:"nextSince"`
+}
+
+type revocationEntry struct {
+	AgentDID             string `json:"agentDid"`
+	RevokedAt            string `json:"revokedAt"`
+	Reason               string `json:"reason"`
+	TransparencyLogIndex int64  `json:"transparencyLogIndex"`
+	RevokedByKeyID       string `json:"revokedByKeyId"`
 }
 
 type keypairRef struct {
@@ -394,6 +428,258 @@ func verifySTH(f fixture) result {
 	return result{RejectCategory: "SIGNATURE_INVALID", Reason: "STH Ed25519 signature did not verify against any configured public key"}
 }
 
+// checkEmbeddedSTH validates a tree head embedded inside a §5.4/§5.5 proof
+// payload — the same rules as verifySTH, factored so the proof verifiers and
+// the standalone sth fixtureType stay behaviorally identical. Returns
+// (category, reason); empty category means the head verifies.
+func checkEmbeddedSTH(label string, sth *signedTreeHead, keys []keypairRef) (string, string) {
+	if sth == nil {
+		return "PARSE_ERROR", label + " missing"
+	}
+	if sth.TreeSize <= 0 {
+		return "STH_INVALID", fmt.Sprintf("%s.treeSize %d must be > 0", label, sth.TreeSize)
+	}
+	if _, err := time.Parse(time.RFC3339, sth.Timestamp); err != nil {
+		return "STH_INVALID", label + " bad timestamp: " + err.Error()
+	}
+	rootBytes, err := sthSignedBytes(sth.RootHash)
+	if err != nil {
+		return "STH_INVALID", label + ": " + err.Error()
+	}
+	sigBytes, err := base64.StdEncoding.DecodeString(sth.Signature)
+	if err != nil {
+		return "SIGNATURE_INVALID", label + " signature has invalid base64: " + err.Error()
+	}
+	edKeys, _ := indexPublicKeys(keys)
+	for _, pk := range edKeys {
+		if ed25519.Verify(pk, rootBytes, sigBytes) {
+			return "", ""
+		}
+	}
+	return "SIGNATURE_INVALID", label + " Ed25519 signature did not verify against any configured public key"
+}
+
+// ---------------------------------------------------------------------------
+// RFC 6962 Merkle verification (ATP §5.4/§5.5)
+//
+// leaf = SHA-256(0x00 || entry), node = SHA-256(0x01 || left || right).
+// Verification follows RFC 9162 §2.1.3.2 (inclusion) and §2.1.4.2
+// (consistency). Mirror VERBATIM in the Python verifier.
+// ---------------------------------------------------------------------------
+
+func merkleNodeHash(left, right [sha256.Size]byte) [sha256.Size]byte {
+	buf := make([]byte, 0, 1+2*sha256.Size)
+	buf = append(buf, 0x01)
+	buf = append(buf, left[:]...)
+	buf = append(buf, right[:]...)
+	return sha256.Sum256(buf)
+}
+
+// wireHashBytes decodes a "SHA256:<64 lowercase hex>" wire hash.
+func wireHashBytes(wire string) ([sha256.Size]byte, error) {
+	var out [sha256.Size]byte
+	stripped := strings.TrimPrefix(wire, "SHA256:")
+	if stripped == wire {
+		return out, fmt.Errorf("hash %q missing SHA256: prefix", wire)
+	}
+	raw, err := hex.DecodeString(stripped)
+	if err != nil {
+		return out, fmt.Errorf("hash %q is not hex: %v", wire, err)
+	}
+	if len(raw) != sha256.Size {
+		return out, fmt.Errorf("hash %q must decode to %d bytes, got %d", wire, sha256.Size, len(raw))
+	}
+	copy(out[:], raw)
+	return out, nil
+}
+
+// verifyMerkleInclusion checks an audit path per RFC 9162 §2.1.3.2.
+func verifyMerkleInclusion(leafIndex, treeSize int64, leafHash [sha256.Size]byte, path [][sha256.Size]byte, root [sha256.Size]byte) bool {
+	if leafIndex < 0 || treeSize < 1 || leafIndex >= treeSize {
+		return false
+	}
+	fn, sn := leafIndex, treeSize-1
+	r := leafHash
+	for _, p := range path {
+		if sn == 0 {
+			return false
+		}
+		if fn%2 == 1 || fn == sn {
+			r = merkleNodeHash(p, r)
+			if fn%2 == 0 {
+				for fn%2 == 0 && fn != 0 {
+					fn >>= 1
+					sn >>= 1
+				}
+			}
+		} else {
+			r = merkleNodeHash(r, p)
+		}
+		fn >>= 1
+		sn >>= 1
+	}
+	return sn == 0 && r == root
+}
+
+// verifyMerkleConsistency checks a consistency path per RFC 9162 §2.1.4.2.
+func verifyMerkleConsistency(fromSize, toSize int64, path [][sha256.Size]byte, fromRoot, toRoot [sha256.Size]byte) bool {
+	if fromSize < 1 || fromSize > toSize {
+		return false
+	}
+	if fromSize == toSize {
+		return len(path) == 0 && fromRoot == toRoot
+	}
+	full := path
+	if fromSize&(fromSize-1) == 0 {
+		full = append([][sha256.Size]byte{fromRoot}, path...)
+	}
+	if len(full) == 0 {
+		return false
+	}
+	fn, sn := fromSize-1, toSize-1
+	for fn%2 == 1 {
+		fn >>= 1
+		sn >>= 1
+	}
+	fr, sr := full[0], full[0]
+	for _, c := range full[1:] {
+		if sn == 0 {
+			return false
+		}
+		if fn%2 == 1 || fn == sn {
+			fr = merkleNodeHash(c, fr)
+			sr = merkleNodeHash(c, sr)
+			if fn%2 == 0 {
+				for fn%2 == 0 && fn != 0 {
+					fn >>= 1
+					sn >>= 1
+				}
+			}
+		} else {
+			sr = merkleNodeHash(sr, c)
+		}
+		fn >>= 1
+		sn >>= 1
+	}
+	return sn == 0 && fr == fromRoot && sr == toRoot
+}
+
+// verifyInclusionProof implements ATP §5.4: the embedded tree head verifies
+// per §5.6, then the RFC 9162 §2.1.3.2 recomputation from leafHash along
+// auditPath must reproduce sth.rootHash.
+func verifyInclusionProof(f fixture) result {
+	if f.InclusionProof == nil {
+		return result{RejectCategory: "PARSE_ERROR", Reason: "inclusionProof missing"}
+	}
+	ip := f.InclusionProof
+
+	leaf, err := wireHashBytes(ip.LeafHash)
+	if err != nil {
+		return result{RejectCategory: "PARSE_ERROR", Reason: "leafHash: " + err.Error()}
+	}
+	path := make([][sha256.Size]byte, len(ip.AuditPath))
+	for i, p := range ip.AuditPath {
+		path[i], err = wireHashBytes(p)
+		if err != nil {
+			return result{RejectCategory: "PARSE_ERROR", Reason: fmt.Sprintf("auditPath[%d]: %v", i, err)}
+		}
+	}
+	if cat, reason := checkEmbeddedSTH("signedTreeHead", ip.SignedTreeHead, f.VerifierState.PublicKeys); cat != "" {
+		return result{RejectCategory: cat, Reason: reason}
+	}
+	root, err := wireHashBytes(ip.SignedTreeHead.RootHash)
+	if err != nil {
+		return result{RejectCategory: "PARSE_ERROR", Reason: "rootHash: " + err.Error()}
+	}
+	if ip.LogIndex < 0 || ip.LogIndex >= ip.SignedTreeHead.TreeSize {
+		return result{RejectCategory: "PARSE_ERROR", Reason: fmt.Sprintf("logIndex %d out of range for treeSize %d", ip.LogIndex, ip.SignedTreeHead.TreeSize)}
+	}
+	if !verifyMerkleInclusion(ip.LogIndex, ip.SignedTreeHead.TreeSize, leaf, path, root) {
+		return result{RejectCategory: "PROOF_INVALID", Reason: "recomputed root from leafHash along auditPath does not equal signedTreeHead.rootHash"}
+	}
+	return result{Accepted: true, Ed25519Valid: true, SigsExpected: 1, SigsValid: 1}
+}
+
+// verifyConsistencyProof implements ATP §5.5: both embedded tree heads verify
+// per §5.6, then the RFC 9162 §2.1.4.2 algorithm must reproduce both roots.
+func verifyConsistencyProof(f fixture) result {
+	if f.ConsistencyProof == nil {
+		return result{RejectCategory: "PARSE_ERROR", Reason: "consistencyProof missing"}
+	}
+	cp := f.ConsistencyProof
+
+	if cp.FromSignedTreeHead == nil || cp.ToSignedTreeHead == nil {
+		return result{RejectCategory: "PARSE_ERROR", Reason: "fromSignedTreeHead/toSignedTreeHead missing"}
+	}
+	if cp.FromSize != cp.FromSignedTreeHead.TreeSize || cp.ToSize != cp.ToSignedTreeHead.TreeSize {
+		return result{RejectCategory: "PARSE_ERROR", Reason: "fromSize/toSize must equal the embedded tree heads' treeSize values"}
+	}
+	if cp.FromSize >= cp.ToSize {
+		return result{RejectCategory: "PARSE_ERROR", Reason: fmt.Sprintf("fromSize %d must be < toSize %d", cp.FromSize, cp.ToSize)}
+	}
+	path := make([][sha256.Size]byte, len(cp.ConsistencyPath))
+	var err error
+	for i, p := range cp.ConsistencyPath {
+		path[i], err = wireHashBytes(p)
+		if err != nil {
+			return result{RejectCategory: "PARSE_ERROR", Reason: fmt.Sprintf("consistencyPath[%d]: %v", i, err)}
+		}
+	}
+	if cat, reason := checkEmbeddedSTH("fromSignedTreeHead", cp.FromSignedTreeHead, f.VerifierState.PublicKeys); cat != "" {
+		return result{RejectCategory: cat, Reason: reason}
+	}
+	if cat, reason := checkEmbeddedSTH("toSignedTreeHead", cp.ToSignedTreeHead, f.VerifierState.PublicKeys); cat != "" {
+		return result{RejectCategory: cat, Reason: reason}
+	}
+	fromRoot, err := wireHashBytes(cp.FromSignedTreeHead.RootHash)
+	if err != nil {
+		return result{RejectCategory: "PARSE_ERROR", Reason: "fromSignedTreeHead.rootHash: " + err.Error()}
+	}
+	toRoot, err := wireHashBytes(cp.ToSignedTreeHead.RootHash)
+	if err != nil {
+		return result{RejectCategory: "PARSE_ERROR", Reason: "toSignedTreeHead.rootHash: " + err.Error()}
+	}
+	if !verifyMerkleConsistency(cp.FromSize, cp.ToSize, path, fromRoot, toRoot) {
+		return result{RejectCategory: "PROOF_INVALID", Reason: "consistencyPath does not connect fromSignedTreeHead.rootHash to toSignedTreeHead.rootHash (append-only claim broken)"}
+	}
+	return result{Accepted: true, Ed25519Valid: true, SigsExpected: 2, SigsValid: 2}
+}
+
+// verifyRevocationList implements ATP §8.1: structural verification of the
+// unsigned revocation body. A malformed timestamp rejects the WHOLE response
+// — a client that skips unparseable entries keeps trusting a revoked agent.
+func verifyRevocationList(f fixture) result {
+	if f.RevocationList == nil {
+		return result{RejectCategory: "PARSE_ERROR", Reason: "revocationList missing"}
+	}
+	rl := f.RevocationList
+
+	if rl.NextSince == "" {
+		return result{RejectCategory: "PARSE_ERROR", Reason: "nextSince missing"}
+	}
+	if _, err := time.Parse(time.RFC3339, rl.NextSince); err != nil {
+		return result{RejectCategory: "PARSE_ERROR", Reason: "nextSince is not RFC 3339: " + err.Error()}
+	}
+	for i, entry := range rl.Revocations {
+		if entry.AgentDID == "" || !strings.HasPrefix(entry.AgentDID, "did:") {
+			return result{RejectCategory: "PARSE_ERROR", Reason: fmt.Sprintf("revocations[%d].agentDid %q is not a DID", i, entry.AgentDID)}
+		}
+		if _, err := time.Parse(time.RFC3339, entry.RevokedAt); err != nil {
+			return result{RejectCategory: "PARSE_ERROR", Reason: fmt.Sprintf("revocations[%d].revokedAt is not RFC 3339: %v", i, err)}
+		}
+		if entry.Reason == "" {
+			return result{RejectCategory: "PARSE_ERROR", Reason: fmt.Sprintf("revocations[%d].reason missing", i)}
+		}
+		if entry.TransparencyLogIndex < 0 {
+			return result{RejectCategory: "PARSE_ERROR", Reason: fmt.Sprintf("revocations[%d].transparencyLogIndex %d must be >= 0", i, entry.TransparencyLogIndex)}
+		}
+		if !strings.Contains(entry.RevokedByKeyID, "#") {
+			return result{RejectCategory: "PARSE_ERROR", Reason: fmt.Sprintf("revocations[%d].revokedByKeyId %q is not fragment-qualified", i, entry.RevokedByKeyID)}
+		}
+	}
+	return result{Accepted: true}
+}
+
 func validVerdict(v string) bool {
 	switch v {
 	case "passed", "warning", "blocked", "listed", "verified", "unknown":
@@ -438,6 +724,12 @@ func verify(f fixture) result {
 		return verifyTrustProof(f)
 	case "sth":
 		return verifySTH(f)
+	case "inclusionProof":
+		return verifyInclusionProof(f)
+	case "consistencyProof":
+		return verifyConsistencyProof(f)
+	case "revocationList":
+		return verifyRevocationList(f)
 	default:
 		return result{RejectCategory: "PARSE_ERROR", Reason: "unknown fixtureType " + f.FixtureType}
 	}

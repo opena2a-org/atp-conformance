@@ -7,10 +7,12 @@ under schemas/vendor/agent-trust-protocol/ and byte-drift-gated in CI against
 the pinned ATP_SPEC_REF.
 
 Contract: every fixture carries exactly one payload member (trustProof,
-signedTreeHead, or discoveryResponse) and that payload MUST validate against
-its schema. All current REJECT fixtures are crypto/state rejects, so they are
-shape-valid by design; a fixture failing schema validation means fixtures and
-schemas have drifted apart.
+signedTreeHead, discoveryResponse, inclusionProof, consistencyProof, or
+revocationList) and that payload MUST validate against its schema. All
+REJECT fixtures are crypto/state/strict-parse rejects, so they are
+shape-valid by design (timestamp formats are schema annotations; the
+verifiers enforce RFC 3339 parsing); a fixture failing schema validation
+means fixtures and schemas have drifted apart.
 """
 
 import json
@@ -19,6 +21,7 @@ import sys
 
 try:
     from jsonschema import Draft202012Validator
+    from referencing import Registry, Resource
 except ImportError:
     print("error: the 'jsonschema' package is required (pip install jsonschema)")
     sys.exit(2)
@@ -30,15 +33,28 @@ PAYLOAD_SCHEMAS = {
     "trustProof": "trust-proof-v1.schema.json",
     "signedTreeHead": "signed-tree-head-v1.schema.json",
     "discoveryResponse": "discovery-v1.schema.json",
+    "inclusionProof": "inclusion-proof-v1.schema.json",
+    "consistencyProof": "consistency-proof-v1.schema.json",
+    "revocationList": "revocation-list-v1.schema.json",
 }
 
 
 def main() -> int:
+    # Cross-schema $refs (the proof schemas embed signed-tree-head-v1 by its
+    # $id) resolve from a local registry over the vendored copies — never the
+    # network.
+    resources = []
+    for sf in sorted(VENDOR.glob("*.schema.json")):
+        doc = json.loads(sf.read_text(encoding="utf-8"))
+        if "$id" in doc:
+            resources.append((doc["$id"], Resource.from_contents(doc)))
+    registry = Registry().with_resources(resources)
+
     validators = {}
     for member, filename in PAYLOAD_SCHEMAS.items():
         schema = json.loads((VENDOR / filename).read_text(encoding="utf-8"))
         Draft202012Validator.check_schema(schema)
-        validators[member] = Draft202012Validator(schema)
+        validators[member] = Draft202012Validator(schema, registry=registry)
 
     failures = 0
     fixtures = sorted((ROOT / "fixtures").glob("*.json"))
