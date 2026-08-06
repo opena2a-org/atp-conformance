@@ -1,7 +1,7 @@
 # atp-conformance
 
 Conformance fixtures and reference verifiers for the
-[Agent Trust Protocol (ATP) v1.0.0-rc1](https://github.com/opena2a-org/agent-trust-protocol).
+[Agent Trust Protocol (ATP) v1.0.0-rc1](https://github.com/opena2a-standards/agent-trust-protocol).
 
 Each fixture is a byte-stable JSON file that bundles a pinned ATP protocol
 response (discovery, trust proof, or Signed Tree Head) with verifier
@@ -13,7 +13,7 @@ report PASS or FAIL per vector. Fixture bytes are pinned in
 This suite mirrors the pattern set by
 [`atx-conformance`](https://github.com/opena2a-standards/atx-conformance) (which
 covers the ATX credential schema) and by
-[`a2a-idf-conformance/fixtures/composition/aim-did-rfc9421/`](https://github.com/opena2a-org/a2a-idf-conformance/tree/main/fixtures/composition/aim-did-rfc9421)
+[`a2a-idf-conformance/fixtures/composition/aim-did-rfc9421/`](https://github.com/opena2a-standards/a2a-idf-conformance/tree/main/fixtures/composition/aim-did-rfc9421)
 (APS interop conformance for A2A-IDF wire signatures). It closes criterion (c)
 on the OpenA2A maturity bar tracked in
 [`a2aproject/A2A#1885`](https://github.com/a2aproject/A2A/issues/1885):
@@ -72,7 +72,7 @@ CI-checked against drift.
 enforces every claim in this README on each push and pull request:
 
 1. Both reference verifiers run against `fixtures/` and must report
-   `7 pass, 0 fail`.
+   `13 pass, 0 fail`.
 2. The fixture generator re-runs and the committed fixture bytes plus
    `MANIFEST.sha256` must reproduce exactly (byte-pin).
 3. The cross-implementation parity gate
@@ -90,7 +90,7 @@ enforces every claim in this README on each push and pull request:
 ## Relationship to the existing ATP bash conformance scripts
 
 The ATP spec repo carries a live-endpoint bash conformance suite at
-[`agent-trust-protocol/conformance/level{1,2}.sh`](https://github.com/opena2a-org/agent-trust-protocol/tree/main/conformance).
+[`agent-trust-protocol/conformance/level{1,2}.sh`](https://github.com/opena2a-standards/agent-trust-protocol/tree/main/conformance).
 Those scripts hit a running ATP authority (default `https://api.oa2a.org`)
 and exercise the discovery, trust-proof, and transparency endpoints
 end-to-end. They are complementary to this repository:
@@ -147,9 +147,10 @@ here as an open spec question.
 
 ATP §4.3 paragraph 2 SHOULDs hybrid Ed25519 + ML-DSA-65 signing. The
 production reference authority at `api.oa2a.org` emits hybrid trust proofs
-today (per
-[opena2a-registry PR #214 + #215](https://github.com/opena2a-org/opena2a-registry)
-in the related ATX implementation). Shipping a hybrid fixture in v0.1
+today (per opena2a-registry PR #214 + #215 in the related ATX implementation;
+that repository is private, so the observable evidence is the authority's own
+output at `api.oa2a.org` and the hybrid fixture in this suite). Shipping a
+hybrid fixture in v0.1
 makes the SHOULD-path concrete and gives second implementers a wire-format
 target.
 
@@ -292,7 +293,7 @@ breaking change for downstream verifiers.
 
 | Component | Version | Source |
 |---|---|---|
-| ATP spec | v1.0.0-rc1 | [`opena2a-org/agent-trust-protocol/ATP-SPEC.md`](https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md) |
+| ATP spec | v1.0.0-rc1 | [`opena2a-org/agent-trust-protocol/ATP-SPEC.md`](https://github.com/opena2a-standards/agent-trust-protocol/blob/main/ATP-SPEC.md) |
 | `did:opena2a` method | v0.1 (W3C registration filed, PR `w3c/did-extensions#717`) | [`opena2a-standards/did-method-opena2a`](https://github.com/opena2a-standards/did-method-opena2a/blob/main/did-method-opena2a.md) |
 | Ed25519 test vector source | RFC 8032 §7.1 Test 1 | [datatracker.ietf.org/doc/html/rfc8032](https://datatracker.ietf.org/doc/html/rfc8032) |
 | ML-DSA-65 | FIPS 204 final | [csrc.nist.gov/pubs/fips/204/final](https://csrc.nist.gov/pubs/fips/204/final) |
@@ -304,8 +305,8 @@ breaking change for downstream verifiers.
 
 | Implementation | Verifier | Status |
 |---|---|---|
-| `opena2a-standards/atp-conformance/verifiers/go` (this repo) | Go, full Ed25519 plus ML-DSA-65 | 4 / 4 PASS |
-| `opena2a-standards/atp-conformance/verifiers/python` (this repo) | Python, Ed25519, ML-DSA-65 out of scope | 4 / 4 PASS |
+| `opena2a-standards/atp-conformance/verifiers/go` (this repo) | Go, full Ed25519 plus ML-DSA-65 | 13 / 13 PASS |
+| `opena2a-standards/atp-conformance/verifiers/python` (this repo) | Python, Ed25519, ML-DSA-65 out of scope | 13 / 13 PASS |
 
 Independent second-party implementations and cosigners are tracked in
 [`COSIGNERS.md`](./COSIGNERS.md) and on the sibling issue
@@ -314,7 +315,7 @@ Independent second-party implementations and cosigners are tracked in
 ## Cosigning
 
 Second-party cosigners sign [`MANIFEST.sha256`](./MANIFEST.sha256) using
-[Sigstore keyless cosign](https://docs.sigstore.dev/cosign/overview/) and
+[Sigstore keyless cosign](https://docs.sigstore.dev/cosign/signing/overview/) and
 add an entry to [`COSIGNERS.md`](./COSIGNERS.md) recording:
 
 - The commit SHA at which they verified
@@ -356,7 +357,7 @@ scripts/generate-fixtures/       deterministic fixture generator (Go)
 
 Issues and PRs welcome on this repository. Substantive coordination on the
 ATP wire format itself happens in
-[`opena2a-org/agent-trust-protocol`](https://github.com/opena2a-org/agent-trust-protocol)
+[`opena2a-org/agent-trust-protocol`](https://github.com/opena2a-standards/agent-trust-protocol)
 and in the A2A coordination map on
 [`a2aproject/A2A#1885`](https://github.com/a2aproject/A2A/issues/1885).
 

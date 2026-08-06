@@ -88,6 +88,9 @@ jobs:
       - name: Conformance profile is current
         run: python3 scripts/conformance_profile.py --check
 
+      - name: README counts match the fixture set
+        run: python3 scripts/check_readme_counts.py
+
       - name: Upload parity report
         if: always()
         uses: actions/upload-artifact@v4
