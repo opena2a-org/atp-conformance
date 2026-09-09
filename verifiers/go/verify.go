@@ -343,6 +343,12 @@ func verifyTrustProof(f fixture) result {
 	if !issued.Before(expires) {
 		return result{RejectCategory: "SEMANTIC_INVALID", Reason: "issuedAt must be before expiresAt"}
 	}
+	// ATP §4.4 step 5, §10.2 maximum: the declared window may not exceed
+	// 24 hours. Exact comparison, no skew tolerance (§10.2: the skew bound
+	// MUST NOT extend the 24-hour validity), whatever the verifier's clock.
+	if expires.Sub(issued) > 24*time.Hour {
+		return result{RejectCategory: "SEMANTIC_INVALID", Reason: "validity window exceeds 24 hours"}
+	}
 
 	// ATP §4.4 Steps 3-4: key lookup + signature verification.
 	// Spec mandate (§4.3 paragraph 2): in hybrid mode BOTH signatures MUST verify.

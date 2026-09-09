@@ -355,6 +355,31 @@
       ],
       "expected": "REJECT[UNTRUSTED_ISSUER]",
       "description": "A structurally valid, correctly signed, in-date trust proof whose issuerDid (did:opena2a:authority:opena2a.org) is NOT in the verifier's trustedIssuers list (which trusts only did:opena2a:authority:partner.example). Verifier MUST REJECT with category UNTRUSTED_ISSUER per ATP §4.4 step 2."
+    },
+    {
+      "fixture": "fixtures/trust-proof-window-exceeds-max.json",
+      "name": "atp-v1/trust-proof-window-exceeds-max",
+      "fixtureType": "trustProof",
+      "level": "MUST",
+      "specRefs": [
+        {
+          "id": "ATP",
+          "ref": "https://github.com/opena2a-org/agent-trust-protocol/blob/main/ATP-SPEC.md",
+          "section": "§4.4 Verification (step 5: validity window, §10.2 maximum)"
+        },
+        {
+          "id": "RFC 8032",
+          "ref": "https://datatracker.ietf.org/doc/html/rfc8032",
+          "section": "§7.1 Test 1 (Ed25519 keypair source for issuer-primary)"
+        },
+        {
+          "id": "FIPS 204",
+          "ref": "https://csrc.nist.gov/pubs/fips/204/final",
+          "section": "ML-DSA-65 (Module-Lattice-Based DSA)"
+        }
+      ],
+      "expected": "REJECT[SEMANTIC_INVALID]",
+      "description": "The baseline trust proof re-signed with expiresAt 25 hours after issuedAt (2026-05-23T12:00:00Z to 2026-05-24T13:00:00Z). The Ed25519 signature IS valid, the issuer is trusted and the pinned verifier clock (2026-05-24T00:00:00Z) sits inside the window, so the ATP §10.2 24-hour maximum is the sole defect. Verifier MUST REJECT with category SEMANTIC_INVALID per ATP §4.4 step 5."
     }
   ]
 }

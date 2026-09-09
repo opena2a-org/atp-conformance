@@ -38,6 +38,7 @@ What this suite verifies:
 | ATP §4.4 step 1 must-reject: expired proof (valid signature, past expiresAt) | `fixtures/trust-proof-expired.json` |
 | ATP §4.4 step 2 must-reject: untrusted issuer (valid signature, issuer not in trusted set) | `fixtures/trust-proof-untrusted-issuer.json` |
 | ATP §4.4 step 4 must-reject: tampered Ed25519 signature (first byte XOR 0xFF) | `fixtures/trust-proof-tampered-signature.json` |
+| ATP §4.4 step 5 must-reject: declared validity window above the §10.2 24-hour maximum (valid signature, trusted issuer, clock inside the window; `expiresAt` 25 hours after `issuedAt`) | `fixtures/trust-proof-window-exceeds-max.json` |
 | ATP §5.6 Signed Tree Head | `fixtures/transparency-log-sth.json` |
 | ATP §5.4 inclusion proof (RFC 6962 §2.1.1 audit path over the deterministic 8-leaf tree; RFC 9162 §2.1.3.2 verification) | `fixtures/transparency-inclusion-proof-valid.json` |
 | ATP §5.4 must-reject: tampered audit path (first byte of `auditPath[0]` XOR 0xFF; STH still verifies, only the root recomputation catches it) | `fixtures/transparency-inclusion-proof-tampered-path.json` |
@@ -49,8 +50,8 @@ What this suite verifies:
 Each negative fixture is valid in every respect except the one defect it
 pins, so a verifier that skips that verification step (and only that step)
 wrongly ACCEPTs it. Expected outcomes pin the reject category
-(`EXPIRED`, `UNTRUSTED_ISSUER`, `SIGNATURE_INVALID`, `PROOF_INVALID`,
-`PARSE_ERROR`), so rejecting for the wrong reason also fails.
+(`EXPIRED`, `UNTRUSTED_ISSUER`, `SIGNATURE_INVALID`, `SEMANTIC_INVALID`,
+`PROOF_INVALID`, `PARSE_ERROR`), so rejecting for the wrong reason also fails.
 
 What this suite does NOT verify (v0.3):
 
@@ -72,7 +73,7 @@ CI-checked against drift.
 enforces every claim in this README on each push and pull request:
 
 1. Both reference verifiers run against `fixtures/` and must report
-   `13 pass, 0 fail`.
+   `14 pass, 0 fail`.
 2. The fixture generator re-runs and the committed fixture bytes plus
    `MANIFEST.sha256` must reproduce exactly (byte-pin).
 3. The cross-implementation parity gate
@@ -197,7 +198,7 @@ All fixtures use:
 - Trusted authority DID: `did:opena2a:authority:opena2a.org`
 - Test agent DID: `did:opena2a:mcp_server:agent_conformance_test_001`
 - Pinned verifier clock: `2026-05-24T00:00:00Z`
-- Trust-proof validity window: `2026-05-23T12:00:00Z` to `2026-05-24T06:00:00Z` (18 hours, inside the ATP §10.2 24-hour maximum; the expired fixture pins its own 12-hour window in the past)
+- Trust-proof validity window: `2026-05-23T12:00:00Z` to `2026-05-24T06:00:00Z` (18 hours, inside the ATP §10.2 24-hour maximum; the expired fixture pins its own 12-hour window in the past; the window-exceeds-max fixture declares a 25-hour window on purpose, as the step-5 must-reject vector)
 - Ed25519 keypair source: [RFC 8032 §7.1 Test 1](https://datatracker.ietf.org/doc/html/rfc8032#section-7.1)
 - ML-DSA-65 keypair source: fixed test seed (incrementing bytes `00..1f`), public key pinned in [`vectors/mldsa65-seed.json`](./vectors/mldsa65-seed.json)
 
@@ -244,8 +245,8 @@ For full hybrid verification end to end, use the Go verifier.
 
 ### Expected output
 
-Both verifiers report `summary: 7 pass, 0 fail (7 fixtures)` against the
-shipped fixture set (4 ACCEPT, 3 REJECT). Any divergence on bytes (the
+Both verifiers report `summary: 14 pass, 0 fail (14 fixtures)` against the
+shipped fixture set (7 ACCEPT, 7 REJECT). Any divergence on bytes (the
 fixture file was modified) or on verifier semantics (the verifier has
 drifted from the spec) shows up as one or more FAIL lines.
 
@@ -306,8 +307,8 @@ breaking change for downstream verifiers.
 
 | Implementation | Verifier | Status |
 |---|---|---|
-| `opena2a-standards/atp-conformance/verifiers/go` (this repo) | Go, full Ed25519 plus ML-DSA-65 | 13 / 13 PASS |
-| `opena2a-standards/atp-conformance/verifiers/python` (this repo) | Python, Ed25519, ML-DSA-65 out of scope | 13 / 13 PASS |
+| `opena2a-standards/atp-conformance/verifiers/go` (this repo) | Go, full Ed25519 plus ML-DSA-65 | 14 / 14 PASS |
+| `opena2a-standards/atp-conformance/verifiers/python` (this repo) | Python, Ed25519, ML-DSA-65 out of scope | 14 / 14 PASS |
 
 Independent second-party implementations and cosigners are tracked in
 [`COSIGNERS.md`](./COSIGNERS.md) and on the sibling issue
@@ -320,7 +321,7 @@ Second-party cosigners sign [`MANIFEST.sha256`](./MANIFEST.sha256) using
 add an entry to [`COSIGNERS.md`](./COSIGNERS.md) recording:
 
 - The commit SHA at which they verified
-- The verifier exit summary they observed (e.g., `go=7 pass, 0 fail; python=7 pass, 0 fail`)
+- The verifier exit summary they observed (e.g., `go=14 pass, 0 fail; python=14 pass, 0 fail`)
 - Their identity / organization
 - The Sigstore signature artifact path
 
@@ -334,7 +335,7 @@ LICENSE                          Apache 2.0
 README.md                        this file
 MANIFEST.sha256                  per-fixture SHA-256 (path-sorted)
 COSIGNERS.md                     second-party cosigner registry
-fixtures/                        the 4 conformance fixtures (byte-stable JSON)
+fixtures/                        the 14 conformance fixtures (byte-stable JSON)
 vectors/                         test keypair vectors (TEST-ONLY)
 verifiers/go/                    Go reference verifier (full hybrid)
 verifiers/python/                Python reference verifier (Ed25519)

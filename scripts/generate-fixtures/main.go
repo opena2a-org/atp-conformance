@@ -756,6 +756,30 @@ func main() {
 				TrustProof:    &tp,
 			}
 		}},
+		{"fixtures/trust-proof-window-exceeds-max.json", func() Fixture {
+			// The baseline proof re-dated to declare a 25-hour validity window,
+			// one hour past the ATP §10.2 24-hour maximum. The Ed25519 signature
+			// is VALID (signed after the date is set), the issuer is trusted and
+			// the fixed verifier clock sits inside the window, so ATP §4.4 step 5
+			// (validity window) is the only step that can catch it. A verifier
+			// that only checks issuedAt < expiresAt would wrongly ACCEPT it.
+			tp := newBaselineTrustProof()
+			tp.ExpiresAt = "2026-05-24T13:00:00Z" // issuedAt stays 2026-05-23T12:00:00Z
+			sig := signEd25519(primary.SeedHex, canonicalProofPayload(&tp))
+			sig.KeyID = primary.KeyID
+			tp.Signatures = []ProofSignature{sig}
+			return Fixture{
+				Schema:        "https://atp.opena2a.org/schemas/fixture-v1.json",
+				Name:          "atp-v1/trust-proof-window-exceeds-max",
+				Description:   "The baseline trust proof re-signed with expiresAt 25 hours after issuedAt (2026-05-23T12:00:00Z to 2026-05-24T13:00:00Z). The Ed25519 signature IS valid, the issuer is trusted and the pinned verifier clock (2026-05-24T00:00:00Z) sits inside the window, so the ATP §10.2 24-hour maximum is the sole defect. Verifier MUST REJECT with category SEMANTIC_INVALID per ATP §4.4 step 5.",
+				FixtureType:   "trustProof",
+				Spec:          specRefs("§4.4 Verification (step 5: validity window, §10.2 maximum)"),
+				KeypairRefs:   []KeypairRef{keypairRefFor(primary, "vectors/issuer-primary.json")},
+				VerifierState: defaultVerifierState,
+				Expected:      ExpectedOutcome{VerifyResult: "REJECT", RejectCategory: "SEMANTIC_INVALID", ReasonContains: "validity window"},
+				TrustProof:    &tp,
+			}
+		}},
 		{"fixtures/transparency-inclusion-proof-valid.json", func() Fixture {
 			ip := newInclusionProof(primary)
 			return Fixture{

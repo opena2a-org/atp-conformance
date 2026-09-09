@@ -35,7 +35,7 @@ import hashlib
 import json
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -225,6 +225,11 @@ def verify_trust_proof(fixture: dict[str, Any]) -> VerifyResult:
         return VerifyResult(reject_category="PARSE_ERROR", reason=f"bad issuedAt: {exc}")
     if issued >= expires:
         return VerifyResult(reject_category="SEMANTIC_INVALID", reason="issuedAt must be before expiresAt")
+    # ATP §4.4 step 5, §10.2 maximum: the declared window may not exceed
+    # 24 hours. Exact comparison, no skew tolerance (§10.2: the skew bound
+    # MUST NOT extend the 24-hour validity), whatever the verifier's clock.
+    if expires - issued > timedelta(hours=24):
+        return VerifyResult(reject_category="SEMANTIC_INVALID", reason="validity window exceeds 24 hours")
 
     # Steps 3-4: signature.
     payload = canonical_proof_payload(tp)
