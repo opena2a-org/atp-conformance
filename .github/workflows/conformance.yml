@@ -82,6 +82,9 @@ jobs:
           done < MANIFEST.sha256
           exit $rc
 
+      - name: ATP §10.2 trust-proof validity window
+        run: python3 scripts/check_validity_window.py
+
       - name: Cross-implementation parity gate
         run: python3 scripts/parity/parity.py --json parity-report.json
 

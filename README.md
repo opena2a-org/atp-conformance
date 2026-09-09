@@ -197,6 +197,7 @@ All fixtures use:
 - Trusted authority DID: `did:opena2a:authority:opena2a.org`
 - Test agent DID: `did:opena2a:mcp_server:agent_conformance_test_001`
 - Pinned verifier clock: `2026-05-24T00:00:00Z`
+- Trust-proof validity window: `2026-05-23T12:00:00Z` to `2026-05-24T06:00:00Z` (18 hours, inside the ATP §10.2 24-hour maximum; the expired fixture pins its own 12-hour window in the past)
 - Ed25519 keypair source: [RFC 8032 §7.1 Test 1](https://datatracker.ietf.org/doc/html/rfc8032#section-7.1)
 - ML-DSA-65 keypair source: fixed test seed (incrementing bytes `00..1f`), public key pinned in [`vectors/mldsa65-seed.json`](./vectors/mldsa65-seed.json)
 

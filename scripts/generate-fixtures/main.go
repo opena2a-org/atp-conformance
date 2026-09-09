@@ -465,8 +465,12 @@ var (
 	testAgentDID     = "did:opena2a:mcp_server:agent_conformance_test_001"
 	testAuthorityDID = "did:opena2a:authority:opena2a.org"
 	testIssuedAt     = "2026-05-23T00:00:00Z"
-	testExpiresAt    = "2099-12-31T23:59:59Z"
-	testValidFrom    = "2026-01-01T00:00:00Z"
+	// Trust-proof validity window: 18 hours, inside the ATP §10.2 24-hour
+	// maximum, with the fixed verifier clock 12 hours after issuance and
+	// 6 hours before expiry so no reference implementation sits on a boundary.
+	testProofIssuedAt = "2026-05-23T12:00:00Z"
+	testExpiresAt     = "2026-05-24T06:00:00Z"
+	testValidFrom     = "2026-01-01T00:00:00Z"
 	// Deterministic root-hash: SHA-256("opena2a-atp-conformance-sth-v0.1") padded
 	// nowhere; computed at init().
 	testRootHashHex string
@@ -688,7 +692,7 @@ func main() {
 			// ATP §4.4 step-1 expiry check and jumps straight to signature
 			// verification would wrongly ACCEPT this fixture.
 			tp := newBaselineTrustProof()
-			tp.IssuedAt = "2024-01-01T00:00:00Z"
+			tp.IssuedAt = "2024-12-31T12:00:00Z"
 			tp.ExpiresAt = "2025-01-01T00:00:00Z" // fixed clock is 2026-05-24
 			sig := signEd25519(primary.SeedHex, canonicalProofPayload(&tp))
 			sig.KeyID = primary.KeyID
@@ -917,7 +921,7 @@ func newBaselineTrustProof() TrustProof {
 		TrustLevel:           3,
 		TrustScore:           0.825,
 		Verdict:              "passed",
-		IssuedAt:             testIssuedAt,
+		IssuedAt:             testProofIssuedAt,
 		ExpiresAt:            testExpiresAt,
 		IssuerDID:            testAuthorityDID,
 		Signatures:           nil, // filled by builder

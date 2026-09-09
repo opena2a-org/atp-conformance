@@ -54,14 +54,14 @@
     "trustLevel": 3,
     "trustScore": 0.825,
     "verdict": "passed",
-    "issuedAt": "2026-05-23T00:00:00Z",
-    "expiresAt": "2099-12-31T23:59:59Z",
+    "issuedAt": "2026-05-23T12:00:00Z",
+    "expiresAt": "2026-05-24T06:00:00Z",
     "issuerDid": "did:opena2a:authority:opena2a.org",
     "signatures": [
       {
         "keyId": "did:opena2a:authority:opena2a.org#key-1",
         "algorithm": "Ed25519",
-        "value": "lCA1HZLb2Pg7NwPLGjwzRCiau2rA0x5LKkQPrZ6VNso6ftT0CX0n1G86yn9fLXpB2LSe8MT0itaK7kzYpokAAA=="
+        "value": "0KQ6Dh+zPLq+BB9NutK9OV+zX2/cxbSd33k23OwZxmhvlJr+I5/eEDdcxEnSHpgqRFFLt/+b19IMb1mNseWtBw=="
       }
     ],
     "transparencyLogIndex": 42

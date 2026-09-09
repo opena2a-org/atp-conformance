@@ -54,14 +54,14 @@
     "trustLevel": 3,
     "trustScore": 0.825,
     "verdict": "passed",
-    "issuedAt": "2024-01-01T00:00:00Z",
+    "issuedAt": "2024-12-31T12:00:00Z",
     "expiresAt": "2025-01-01T00:00:00Z",
     "issuerDid": "did:opena2a:authority:opena2a.org",
     "signatures": [
       {
         "keyId": "did:opena2a:authority:opena2a.org#key-1",
         "algorithm": "Ed25519",
-        "value": "MIiaThjea48ulYUhevcbe7tb0bgXhYnlR4cCTmQQKmvxTMq+ClmTwjKgqj9G2ddQm9b0LW+bJ6qB41nxpOtZBw=="
+        "value": "uK15LWu3xPOtSrGmJ5Ye1txJPyeyHmWumv4pmQjfrYEFMFADH2gYpJD10fxfpwkwD4xQ2wdtRf8vyAUe9XBhCA=="
       }
     ],
     "transparencyLogIndex": 42
