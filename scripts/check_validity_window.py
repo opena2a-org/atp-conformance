@@ -5,7 +5,11 @@
 fixture that carries a trustProof object must declare an
 expiresAt - issuedAt of at most 24 hours, so the suite never ships a
 proof a §10.2-enforcing verifier would have to refuse on issuance
-grounds. Standard library only; run from the repository root.
+grounds. The one exception is the suite's own ATP §4.4 step-5 must-reject
+vector: a trustProof fixture whose expected block says REJECT with
+category SEMANTIC_INVALID for reason "validity window" declares a window
+above the maximum on purpose, and is exempted (and not counted) here.
+Standard library only; run from the repository root.
 """
 
 import datetime
@@ -22,6 +26,20 @@ def parse_rfc3339_utc(value):
     )
 
 
+def is_window_reject_vector(fixture):
+    """True iff the fixture's expected block labels it as the ATP §4.4
+    step-5 must-reject vector (REJECT / SEMANTIC_INVALID / "validity window").
+    Only such a fixture may declare a window above the §10.2 maximum."""
+    expected = fixture.get("expected")
+    if not isinstance(expected, dict):
+        return False
+    return (
+        expected.get("verifyResult") == "REJECT"
+        and expected.get("rejectCategory") == "SEMANTIC_INVALID"
+        and expected.get("reasonContains") == "validity window"
+    )
+
+
 def main():
     violations = []
     checked = 0
@@ -30,6 +48,12 @@ def main():
             fixture = json.load(f)
         proof = fixture.get("trustProof")
         if not isinstance(proof, dict):
+            continue
+        if is_window_reject_vector(fixture):
+            print(
+                f"{path.name}: exempt (the suite's ATP §4.4 step-5 must-reject "
+                "vector declares a window above the §10.2 maximum on purpose)"
+            )
             continue
         checked += 1
         try:
